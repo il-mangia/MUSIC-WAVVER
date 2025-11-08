@@ -4,11 +4,14 @@ v2.5 (Nov 2025)
 - First-launch legal agreement (mandatory acceptance)
 - Multi-language system (IT / EN / ES / DE)
 - New "Play" button to open downloaded file
+- yt-dlp updated
+
+v.2.3 non-stable beta relase (Nov 2025)
 - UI lock during search/download + auto UI reset after 5s
 - Expanded settings (API key storage, language, preferences)
 - Improved ffmpeg detection (Linux/macOS compatibility)
 
-v2.0 – First Stable Release (2025)
+v2.0 – First Stable Release (Oct 2025)
 - Switched to yt-dlp (faster, stable YouTube backend)
 - ffmpeg-powered audio conversion (WAV / FLAC / MP3)
 - Modern UI with ttkbootstrap and themes
@@ -26,18 +29,19 @@ v1.8 (2024) — UI & Logging Update
 - Treeview search results table
 - Added file logging system
 
-v1.5 (2023) — Quality & Progress Update
+v1.5 (2024) — Quality & Progress Update
 - ffmpeg integration for HQ MP3 (320kbps)
 - Advanced progress bar with ETA
 
-v1.2 (2023) — Search Upgrade
+v1.2 (2024) — Search Upgrade
 - Keyword search (not only YouTube URLs)
 
-v1.0 (2022) — First Beta Prototype
+v1.0 (2024) — First Beta Prototype
 - Basic pytube downloader
 - MP3 output
 - Tkinter GUI
 
 ---
 By Il Mangia — 2025
+
 
