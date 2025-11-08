@@ -1,7 +1,6 @@
 MUSIC WAVVER - CHANGELOG
 
 v2.5 (Nov 2025)
-- AI title cleanup with Google Gemini 1.5 Flash (“Artist - Title” auto formatting)
 - First-launch legal agreement (mandatory acceptance)
 - Multi-language system (IT / EN / ES / DE)
 - New "Play" button to open downloaded file
@@ -41,3 +40,4 @@ v1.0 (2022) — First Beta Prototype
 
 ---
 By Il Mangia — 2025
+
