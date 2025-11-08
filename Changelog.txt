@@ -1,0 +1,43 @@
+MUSIC WAVVER - CHANGELOG
+
+v2.5 (Nov 2025)
+- AI title cleanup with Google Gemini 1.5 Flash (“Artist - Title” auto formatting)
+- First-launch legal agreement (mandatory acceptance)
+- Multi-language system (IT / EN / ES / DE)
+- New "Play" button to open downloaded file
+- UI lock during search/download + auto UI reset after 5s
+- Expanded settings (API key storage, language, preferences)
+- Improved ffmpeg detection (Linux/macOS compatibility)
+
+v2.0 – First Stable Release (2025)
+- Switched to yt-dlp (faster, stable YouTube backend)
+- ffmpeg-powered audio conversion (WAV / FLAC / MP3)
+- Modern UI with ttkbootstrap and themes
+- Download speed limit, progress display, logging
+- Smooth multi-platform support (Windows / Linux / macOS)
+
+----------------------------------
+Previous Beta Development Builds
+----------------------------------
+
+v1.9-fix (2024) — Hotfix
+- YouTube extraction fix after backend break
+
+v1.8 (2024) — UI & Logging Update
+- Treeview search results table
+- Added file logging system
+
+v1.5 (2023) — Quality & Progress Update
+- ffmpeg integration for HQ MP3 (320kbps)
+- Advanced progress bar with ETA
+
+v1.2 (2023) — Search Upgrade
+- Keyword search (not only YouTube URLs)
+
+v1.0 (2022) — First Beta Prototype
+- Basic pytube downloader
+- MP3 output
+- Tkinter GUI
+
+---
+By Il Mangia — 2025
