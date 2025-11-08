@@ -1,7 +1,8 @@
 # 🎧 Music Wavver V2.5
 
 **Developed and tested on Ubuntu 25.10 and Windows 11**  
-Made with ❤️ in **Italy 🇮🇹**
+Made with ❤️ in **Italy 🇮🇹**.
+You know that i tested this program only downloading [DUELE EL CORAZON](https://open.spotify.com/intl-it/track/5adqS3stLaSPAEOszOnpXG)?
 
 **Music Wavver** is a desktop application built to search, download, and convert high-quality audio tracks from YouTube with style and precision.  
 Developed with **Python 3**, **yt-dlp**, and **ttkbootstrap**, it combines a modern interface with a powerful backend for fast, stable, and reliable audio extraction.
