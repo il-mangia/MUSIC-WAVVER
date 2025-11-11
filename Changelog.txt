@@ -1,5 +1,11 @@
 MUSIC WAVVER - CHANGELOG
 
+v2.7 (Nov 2025)
+- yt_dlp auto update
+- Support for YouTube's lists and playlists
+- Fast and secure
+- ID3 auto writer
+
 v2.5 (Nov 2025)
 - First-launch legal agreement (mandatory acceptance)
 - Multi-language system (IT / EN / ES / DE)
@@ -43,5 +49,6 @@ v1.0 (2024) — First Beta Prototype
 
 ---
 By Il Mangia — 2025
+
 
 
