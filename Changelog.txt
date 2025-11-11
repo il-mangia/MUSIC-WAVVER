@@ -1,6 +1,12 @@
 MUSIC WAVVER - CHANGELOG
 
-v2.7 (Nov 2025)
+
+v2.7-fix closed beta relase (Nov 2025)
+- Fixed download bug
+- Clean file names
+- Write ID3 setting
+
+v2.7 closed beta relase (Nov 2025)
 - yt_dlp auto update
 - Support for YouTube's lists and playlists
 - Fast and secure
@@ -49,6 +55,7 @@ v1.0 (2024) — First Beta Prototype
 
 ---
 By Il Mangia — 2025
+
 
 
 
