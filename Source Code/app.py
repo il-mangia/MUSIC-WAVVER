@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 BY IL MANGIA - 11/11/2025 (Aggiornato e Corretto)
-MUSIC WAVVER 2.7 - YouTube Downloader avanzato con GUI ttkbootstrap
+MUSIC WAVVER 2.8.2 - YouTube Downloader avanzato con GUI ttkbootstrap (Playlist STRETTAMENTE SEQUENZIALE E TRACCIATA)
 MADE IN ITALY 🇮🇹 -
 """
 
@@ -16,7 +16,6 @@ import platform
 import time
 import shutil
 import re
-import concurrent.futures #[NUOVO] Per download paralleli
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 import subprocess
@@ -24,9 +23,7 @@ import tkinter as tk
 from tkinter import messagebox, filedialog, simpledialog
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-# Importa in modo difensivo le classi
 from ttkbootstrap.dialogs import Messagebox
-# NON importare da ttkbootstrap.treeview. Il widget è ttk.Treeview stilizzato.
 from tkinter.ttk import Treeview 
 from yt_dlp import YoutubeDL
 
@@ -40,16 +37,29 @@ try:
 except Exception:
     pass
 
-# Imposta il formato del logging (già dettagliato)
+# Ho aggiunto il logger 'playlist_urls' per tracciare i link
+PLAYLIST_LOG_FILE = "playlist_urls.log" 
+playlist_logger = logging.getLogger('playlist_urls')
+playlist_logger.setLevel(logging.INFO)
+pl_handler = logging.FileHandler(PLAYLIST_LOG_FILE, mode='w', encoding='utf-8')
+pl_handler.setFormatter(logging.Formatter("%(message)s"))
+playlist_logger.addHandler(pl_handler)
+
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format="%(asctime)s - %(message)s")
 
 def log(msg):
-    # Aggiunge la stampa su console per debug in tempo reale
+    """Funzione di log principale."""
     print(msg)
     try:
         logging.info(msg)
     except Exception:
         pass
+        
+def log_playlist_url(url):
+    """Logga l'URL nella traccia dedicata."""
+    playlist_logger.info(url)
+    log(f"Tracciamento URL Playlist: {url}")
+
 
 # ---------------------- DEFAULT SETTINGS ----------------------
 DEFAULT_SETTINGS = {
@@ -59,8 +69,8 @@ DEFAULT_SETTINGS = {
     "search_timeout": 15,
     "agreement_accepted": False,
     "language": "it",
-    "last_update_check": "1970-01-01T00:00:00", #[NUOVO] Per updater
-    "concurrent_playlist_downloads": 4, #[NUOVO] Download paralleli
+    "last_update_check": "1970-01-01T00:00:00",
+    "write_id3_tags": True
 }
 
 # ---------------------- LINGUE ----------------------
@@ -76,6 +86,7 @@ LANG = {
         "complete_msg": "Download terminato con successo!",
         "settings": "⚙️ Impostazioni",
         "open_log": "🧾 Apri log",
+        "open_playlist_log": "🔗 Apri Traccia Playlist", 
         "agreement_title": "Accordo legale",
         "agreement_text": (
             "⚠️ ACCORDO LEGALE ⚠️\n\n"
@@ -87,11 +98,11 @@ LANG = {
         ),
         "agreement_close": "Non hai accettato l'accordo. Il programma verrà chiuso.",
         # Stringhe Playlist
-        "playlist_title": "Playlist Downloader",
+        "playlist_title": "Playlist Downloader (Tracciato e Sequenziale)", 
         "playlist_select_dir": "📁 Cartella download (Temporanea/Playlist)",
         "playlist_download_btn": "▶️ Scarica playlist",
-        "playlist_status_fetching": "Recupero video della playlist...",
-        "playlist_status_downloading": "Scaricando {current} video in parallelo... ({done}/{total} completati)", #[MODIFICATO]
+        "playlist_status_fetching": "Recupero video della playlist e tracciamento link...", 
+        "playlist_status_downloading": "Scaricando video {current}/{total} (Sequenziale)...", 
         "playlist_status_complete": "✅ Playlist completata",
         "playlist_prompt_title": "Playlist Rilevata",
         "playlist_prompt_text": "Hai incollato un link contenente una playlist. Cosa vuoi scaricare?",
@@ -99,7 +110,7 @@ LANG = {
         "playlist_prompt_full": "Intera playlist",
         "playlist_prompt_error_no_v": "L'URL è solo una playlist. Avvio download playlist...",
         "playlist_error_no_videos": "Impossibile trovare video validi nella playlist.",
-        # [NUOVO] Stringhe Updater
+        # Stringhe Updater
         "updater_title": "Aggiornamento yt-dlp",
         "updater_prompt_title": "Aggiornamento Consigliato",
         "updater_prompt_text": "Sono passati più di 3 giorni dall'ultimo controllo.\n\nVuoi aggiornare `yt-dlp` ora? (Consigliato per evitare errori di download)",
@@ -109,6 +120,9 @@ LANG = {
         "updater_fail": "Aggiornamento fallito. Controlla il log.",
         "updater_skipped": "Aggiornamento saltato dall'utente.",
         "updater_not_needed": "yt-dlp è già aggiornato. Nessun controllo necessario.",
+        # ID3
+        "write_id3_tags": "Scrivi tag ID3 (Artista/Album) nei file:",
+        "yes_write_tags": "Sì, scrivi metadati"
     },
     "en": {
         "welcome": "Welcome to MUSIC WAVVER",
@@ -121,6 +135,7 @@ LANG = {
         "complete_msg": "Download finished successfully!",
         "settings": "⚙️ Settings",
         "open_log": "🧾 Open log",
+        "open_playlist_log": "🔗 Open Playlist Trace", 
         "agreement_title": "Legal Agreement",
         "agreement_text": (
             "⚠️ LEGAL AGREEMENT ⚠️\n\n"
@@ -130,12 +145,12 @@ LANG = {
             "Press 'Accept' to continue."
         ),
         "agreement_close": "You declined the agreement. The program will close.",
-        # New strings for Playlist
-        "playlist_title": "Playlist Downloader",
+        # Playlist
+        "playlist_title": "Playlist Downloader (Traced and Sequential)", 
         "playlist_select_dir": "📁 Download Folder (Temporary/Playlist)",
         "playlist_download_btn": "▶️ Download Playlist",
-        "playlist_status_fetching": "Fetching playlist videos...",
-        "playlist_status_downloading": "Downloading {current} videos in parallel... ({done}/{total} complete)", #[MODIFIED]
+        "playlist_status_fetching": "Fetching playlist videos and tracing links...", 
+        "playlist_status_downloading": "Downloading video {current}/{total} (Sequential)...", 
         "playlist_status_complete": "✅ Playlist Complete",
         "playlist_prompt_title": "Playlist Detected",
         "playlist_prompt_text": "You pasted a link containing a playlist. What do you want to download?",
@@ -143,7 +158,7 @@ LANG = {
         "playlist_prompt_full": "Entire playlist",
         "playlist_prompt_error_no_v": "The URL is only a playlist. Starting playlist download...",
         "playlist_error_no_videos": "Could not find valid videos in the playlist.",
-        # [NEW] Updater strings
+        # Updater
         "updater_title": "yt-dlp Updater",
         "updater_prompt_title": "Update Recommended",
         "updater_prompt_text": "It has been more than 3 days since the last check.\n\nDo you want to update `yt-dlp` now? (Recommended to prevent download errors)",
@@ -153,8 +168,10 @@ LANG = {
         "updater_fail": "Update failed. Check the log.",
         "updater_skipped": "Update skipped by user.",
         "updater_not_needed": "yt-dlp is up-to-date. No check needed.",
+        # ID3
+        "write_id3_tags": "Write ID3 tags (Artist/Album) to files:",
+        "yes_write_tags": "Yes, write metadata"
     },
-    # Aggiungere traduzioni per 'es' e 'de' se necessario...
     "es": {
         "welcome": "Bienvenido a MUSIC WAVVER",
         "search_btn": "🔍 Buscar / Pegar enlace",
@@ -166,6 +183,7 @@ LANG = {
         "complete_msg": "¡Descarga finalizada correctamente!",
         "settings": "⚙️ Configuración",
         "open_log": "🧾 Abrir registro",
+        "open_playlist_log": "🔗 Abrir Trazado Lista", 
         "agreement_title": "Acuerdo Legal",
         "agreement_text": (
             "⚠️ ACUERDO LEGAL ⚠️\n\n"
@@ -175,12 +193,12 @@ LANG = {
             "Presiona 'Aceptar' para continuar."
         ),
         "agreement_close": "No aceptaste el acuerdo. El programa se cerrará.",
-        # Nuevas cadenas para Playlist
-        "playlist_title": "Descargador de Listas de Reproducción",
+        # Playlist
+        "playlist_title": "Descargador de Listas (Trazado y Secuencial)", 
         "playlist_select_dir": "📁 Carpeta de descarga (Temporal/Lista)",
         "playlist_download_btn": "▶️ Descargar lista",
-        "playlist_status_fetching": "Obteniendo videos de la lista...",
-        "playlist_status_downloading": "Descargando {current} videos en paralelo... ({done}/{total} completados)", #[MODIFICATO]
+        "playlist_status_fetching": "Obteniendo videos y trazando enlaces de la lista...", 
+        "playlist_status_downloading": "Descargando video {current}/{total} (Secuencial)...", 
         "playlist_status_complete": "✅ Lista de Reproducción Completa",
         "playlist_prompt_title": "Lista de Reproducción Detectada",
         "playlist_prompt_text": "¿Qué quieres descargar?",
@@ -188,7 +206,7 @@ LANG = {
         "playlist_prompt_full": "Lista completa",
         "playlist_prompt_error_no_v": "El URL es solo una lista. Iniciando descarga...",
         "playlist_error_no_videos": "No se encontraron videos válidos en la lista.",
-        # [NUEVO] Cadenas de actualización
+        # Updater
         "updater_title": "Actualizador yt-dlp",
         "updater_prompt_title": "Actualización Recomendada",
         "updater_prompt_text": "Han pasado más de 3 días desde la última comprobación.\n\n¿Quieres actualizar `yt-dlp` ahora? (Recomendado para evitar errores de descarga)",
@@ -198,6 +216,9 @@ LANG = {
         "updater_fail": "Actualización fallida. Revisa el registro.",
         "updater_skipped": "Actualización omitida por el usuario.",
         "updater_not_needed": "yt-dlp está actualizado. No se necesita comprobación.",
+        # ID3
+        "write_id3_tags": "Escribir etiquetas ID3 (Artista/Álbum) en archivos:",
+        "yes_write_tags": "Sí, escribir metadatos"
     },
     "de": {
         "welcome": "Willkommen bei MUSIC WAVVER",
@@ -210,6 +231,7 @@ LANG = {
         "complete_msg": "Download erfolgreich beendet!",
         "settings": "⚙️ Einstellungen",
         "open_log": "🧾 Log öffnen",
+        "open_playlist_log": "🔗 Playlist-Protokoll öffnen", 
         "agreement_title": "Rechtliche Vereinbarung",
         "agreement_text": (
             "⚠️ RECHTLICHE VEREINBARUNG ⚠️\n\n"
@@ -219,12 +241,12 @@ LANG = {
             "Klicke auf 'Akzeptieren', um fortzufahren."
         ),
         "agreement_close": "Du hast die Vereinbarung abgelehnt. Das Programm wird geschlossen.",
-        # Neue Zeichenketten für Playlist
-        "playlist_title": "Playlist Downloader",
+        # Playlist
+        "playlist_title": "Playlist Downloader (Verfolgt und Sequenziell)", 
         "playlist_select_dir": "📁 Download-Ordner (Temporär/Playlist)",
         "playlist_download_btn": "▶️ Playlist herunterladen",
-        "playlist_status_fetching": "Playlist-Videos abrufen...",
-        "playlist_status_downloading": "{current} Videos werden parallel heruntergeladen... ({done}/{total} abgeschlossen)", #[MODIFIZIERT]
+        "playlist_status_fetching": "Playlist-Videos abrufen und Links verfolgen...", 
+        "playlist_status_downloading": "Video {current}/{total} wird heruntergeladen (Sequenziell)...", 
         "playlist_status_complete": "✅ Playlist abgeschlossen",
         "playlist_prompt_title": "Playlist erkannt",
         "playlist_prompt_text": "Sie haben einen Link mit einer Playlist eingefügt. Was möchten Sie herunterladen?",
@@ -232,7 +254,7 @@ LANG = {
         "playlist_prompt_full": "Ganze Playlist",
         "playlist_prompt_error_no_v": "Die URL ist nur eine Playlist. Starte Playlist-Download...",
         "playlist_error_no_videos": "Es konnten keine gültigen Videos in der Playlist gefunden werden.",
-        # [NEU] Updater-Strings
+        # Updater
         "updater_title": "yt-dlp Updater",
         "updater_prompt_title": "Update empfohlen",
         "updater_prompt_text": "Seit der letzten Überprüfung sind mehr als 3 Tage vergangen.\n\nMöchten Sie `yt-dlp` jetzt aktualisieren? (Empfohlen, um Download-Fehler zu vermeiden)",
@@ -242,6 +264,9 @@ LANG = {
         "updater_fail": "Update fehlgeschlagen. Überprüfen Sie das Protokoll.",
         "updater_skipped": "Update vom Benutzer übersprungen.",
         "updater_not_needed": "yt-dlp ist auf dem neuesten Stand. Keine Überprüfung erforderlich.",
+        # ID3
+        "write_id3_tags": "ID3-Tags (Künstler/Album) in Dateien schreiben:",
+        "yes_write_tags": "Ja, Metadaten schreiben"
     }
 }
 
@@ -310,12 +335,10 @@ def is_playlist(url):
     parsed = urlparse(url)
     query_params = parse_qs(parsed.query)
     
-    # Caso 1: È un link playlist diretto
     if "playlist" in parsed.path:
         log("🔍 Rilevato URL come link playlist diretto.")
         return True
 
-    # Caso 2: È un link watch con parametro list=
     if "list" in query_params:
         log(f"🔍 Rilevato URL con parametro list={query_params['list'][0]}")
         return True
@@ -328,7 +351,6 @@ def extract_video_id(url):
     query_params = parse_qs(parsed.query)
     if "v" in query_params:
         return query_params["v"][0]
-    # Gestione formati brevi come youtu.be/id
     match = re.search(r'(youtu\.be\/|v=)([a-zA-Z0-9_-]{11})', url)
     if match:
         return match.group(2)
@@ -338,22 +360,18 @@ def extract_video_id(url):
 def _yt_search_worker(query, max_results, result_queue):
     log(f"🔎 Avvio ricerca - Query: '{query}', Max risultati: {max_results}")
     try:
-        # Se è un URL, imposto default_search a 'auto' per consentire il parsing diretto
         is_url = query.startswith("http")
         search_term = query if not is_url else query
         
         opts = {"quiet": True, "extract_flat": True, "skip_download": True, "default_search": "ytsearch"}
         if is_url:
-            # Per url, yt-dlp gestirà l'estrazione, non vogliamo la ricerca.
             opts["default_search"] = "auto"
         
-        # Aggiungo limite di ricerca se non è un URL
         search_query = f"ytsearch{max_results}:{query}" if not is_url else query
 
         with YoutubeDL(opts) as ydl:
             info = ydl.extract_info(search_query, download=False)
             
-            # Se è una ricerca, gestiamo l'array di risultati.
             if not is_url:
                 results = []
                 for e in info.get("entries", []):
@@ -366,7 +384,6 @@ def _yt_search_worker(query, max_results, result_queue):
                         })
                 log(f"✅ Ricerca completata. Trovati {len(results)} risultati.")
                 result_queue.put(("ok", results))
-            # Se è un URL singolo, ritorniamo un array di 1 elemento per coerenza
             elif info.get("id"):
                 results = [{
                     "title": info.get("title", "Sconosciuto"),
@@ -386,14 +403,11 @@ def _yt_search_worker(query, max_results, result_queue):
 
 def search_youtube(query, max_results=10, timeout_seconds=15):
     rq = queue.Queue()
-    # Uso solo l'ID del video se l'URL è di riproduzione, per evitare risultati multipli dalla ricerca
     video_id = extract_video_id(query)
     
     if video_id and query.startswith("http"):
-        # Se è un URL con ID video, cerco solo le info di quell'ID
         query_to_search = f"https://www.youtube.com/watch?v={video_id}"
     else:
-        # Altrimenti è una ricerca per parole chiave
         query_to_search = query
     
     t = threading.Thread(target=_yt_search_worker, args=(query_to_search, max_results, rq), daemon=True)
@@ -413,7 +427,6 @@ LAST_FILE = None
 def download_with_yt_dlp(url, fmt, out_dir, speed_limit, progress_cb=None):
     global LAST_FILE
     
-    # Nomenclatura standard per download singolo: Titolo.ext
     outtmpl = os.path.join(out_dir, "%(title)s.%(ext)s")
     
     log(f"⬇️ Avvio download singolo - URL: {url}, Formato: {fmt}, Cartella: {out_dir}, Limite velocità: {speed_limit}")
@@ -430,26 +443,33 @@ def download_with_yt_dlp(url, fmt, out_dir, speed_limit, progress_cb=None):
             if progress_cb:
                 progress_cb(100)
 
-    # #[MODIFICATO] Aggiunta gestione metadati
     postprocessors = [
-        {"key":"FFmpegExtractAudio","preferredcodec": fmt,"preferredquality": "320"},
-        {"key": "EmbedMetadata", "add_metadata": True}
+        {"key":"FFmpegExtractAudio","preferredcodec": fmt,"preferredquality": "320"}
     ]
     
     ydl_opts = {
         "outtmpl": outtmpl,
         "format": "bestaudio/best",
         "quiet": True,
-        "noplaylist": True, # Essenziale per forzare il download singolo
+        "noplaylist": True,
         "ffmpeg_location": os.path.dirname(FFMPEG_PATH),
         "postprocessors": postprocessors,
-        # Setta solo Titolo e Album (mappa Uploader su Album)
-        "postprocessor_args": {
-            'metadata': 'title="%(title)s", album="%(uploader)s"'
-        },
         "progress_hooks": [hook],
     }
     
+    # Aggiungi metadati solo se l'opzione è attiva E NON è WAV (FIX CRITICO per evitare 'EmbedMetadataPP' su WAV)
+    if SETTINGS.get("write_id3_tags", True):
+        if fmt.lower() != "wav": 
+            log("Scrittura tag ID3 abilitata per download singolo.")
+            ydl_opts["postprocessors"].append({"key": "EmbedMetadata", "add_metadata": True})
+            ydl_opts["postprocessor_args"] = {
+                'metadata': 'title="%(title)s", album="%(uploader)s"'
+            }
+        else:
+            log("⚠️ Scrittura tag ID3 disabilitata per WAV (download singolo) per evitare l'errore 'EmbedMetadataPP'.")
+    else:
+        log("Scrittura tag ID3 disabilitata per download singolo (da impostazioni).")
+
     if speed_limit != "0":
         ydl_opts["ratelimit"] = speed_limit
         
@@ -464,8 +484,7 @@ def download_with_yt_dlp(url, fmt, out_dir, speed_limit, progress_cb=None):
         log(f"❌ Errore critico durante il download singolo: {e}")
         raise e
 
-# ---------------------- PLAYLIST DOWNLOADER UI ----------------------
-# #[MODIFICATO] Classe quasi interamente riscritta per download concorrenti
+# ---------------------- PLAYLIST DOWNLOADER UI (STRETTAMENTE SEQUENZIALE) ----------------------
 class PlaylistDownloader(ttk.Toplevel):
     def __init__(self, master, url):
         super().__init__(master)
@@ -478,24 +497,21 @@ class PlaylistDownloader(ttk.Toplevel):
         self.playlist_videos = []
         self.downloading = False
         self.current_video_index = 0
-        
-        # [NUOVO] Variabili per download concorrente
-        self.download_lock = threading.Lock()
         self.completed_count = 0
-        self.workers = SETTINGS.get("concurrent_playlist_downloads", 4)
-
+        
         self.download_dir = tk.StringVar(value=SETTINGS["download_dir"])
         self.format = tk.StringVar(value="wav")
         self.status = tk.StringVar(value=T["playlist_status_fetching"])
         self.overall_progress_text = tk.StringVar(value="")
-        # [NUOVO] Progresso generale, non più per singolo video
         self.overall_progress_value = tk.DoubleVar(value=0)
 
-        log(f"🆕 Avvio PlaylistDownloader per URL: {url} (Max {self.workers} workers)")
+        log(f"🆕 Avvio PlaylistDownloader per URL: {url} (Modalità STRETTAMENTE SEQUENZIALE V.2.8.3)")
 
         self._build_ui()
+        # Rimuove il contenuto del file di tracciamento ad ogni nuovo avvio playlist
+        open(PLAYLIST_LOG_FILE, 'w').close()
         threading.Thread(target=self._search_playlist_thread, daemon=True).start()
-        self._loop()
+        self.after(100, self._loop)
 
     def _build_ui(self):
         frm = ttk.Frame(self, padding=12)
@@ -521,8 +537,6 @@ class PlaylistDownloader(ttk.Toplevel):
             self.tree.heading(c, text=c)
         self.tree.pack(fill=BOTH, expand=True, pady=8)
         
-        # Configurazione del tag: DEVE essere sull'oggetto Treeview
-        # [MODIFICATO] Aggiunti tag per "fatto" e "fallito"
         self.tree.tag_configure('downloading_tag', background=self.master.style.colors.info)
         self.tree.tag_configure('done_tag', background=self.master.style.colors.success)
         self.tree.tag_configure('failed_tag', background=self.master.style.colors.danger)
@@ -541,7 +555,6 @@ class PlaylistDownloader(ttk.Toplevel):
 
         # Stato e Progresso
         ttk.Label(frm, textvariable=self.overall_progress_text, bootstyle=INFO).pack(anchor=W, pady=(8, 2))
-        # [MODIFICATO] Progress bar usa overall_progress_value
         self.progress_bar = ttk.Progressbar(frm, variable=self.overall_progress_value, length=500, bootstyle=INFO)
         self.progress_bar.pack(fill=X)
         ttk.Label(frm, textvariable=self.status, width=80).pack(anchor=W, pady=(4, 0))
@@ -554,11 +567,12 @@ class PlaylistDownloader(ttk.Toplevel):
             log(f"📁 Cartella download playlist aggiornata a: {d}")
 
     def _search_playlist_thread(self):
+        """Recupera i video e NE LOGGA GLI URL NEL FILE DEDICATO."""
         try:
             log(f"🔎 Avvio ricerca video in playlist: {self.playlist_url}")
             ydl_opts = {
                 "quiet": True,
-                "extract_flat": "in_playlist", # Estrae info superficiali di tutti gli elementi
+                "extract_flat": "in_playlist",
                 "skip_download": True,
             }
             with YoutubeDL(ydl_opts) as ydl:
@@ -567,9 +581,14 @@ class PlaylistDownloader(ttk.Toplevel):
             videos = []
             for entry in info.get("entries", []):
                 if entry and entry.get("id"):
+                    url = f"https://www.youtube.com/watch?v={entry['id']}"
+                    
+                    # === TRACCIAMENTO CRITICO: Logga l'URL elemento per elemento PRIMA del download ===
+                    log_playlist_url(url)
+                    
                     videos.append({
                         "title": entry.get("title", "Titolo Sconosciuto"),
-                        "url": f"https://www.youtube.com/watch?v={entry['id']}",
+                        "url": url,
                         "duration": entry.get("duration_string", "N/D"),
                         "uploader": entry.get("channel", "Sconosciuto")
                     })
@@ -590,9 +609,8 @@ class PlaylistDownloader(ttk.Toplevel):
             self.status.set(f"Trovati {len(self.playlist_videos)} video. Pronto per il download.")
             self.overall_progress_text.set(f"0/{len(self.playlist_videos)} video scaricati.")
             self.btn_download.config(state=NORMAL)
-            # [NUOVO] Imposta il massimo della progress bar
             self.progress_bar.config(maximum=len(self.playlist_videos))
-            log(f"✅ Trovati {len(self.playlist_videos)} video nella playlist. UI abilitata.")
+            log(f"✅ Trovati {len(self.playlist_videos)} video nella playlist. URL tracciati in {PLAYLIST_LOG_FILE}. UI abilitata.")
 
         except Exception as e:
             self.status.set("Errore nel recupero della playlist")
@@ -606,32 +624,34 @@ class PlaylistDownloader(ttk.Toplevel):
             return
 
         self.downloading = True
+        self.current_video_index = 0
         self.completed_count = 0
         self.btn_download.config(state=DISABLED)
-        self.tree.config(selectmode="none") # Blocca la selezione
+        self.tree.config(selectmode="none")
         
-        log(f"⬇️ Avvio thread di download playlist. {len(self.playlist_videos)} video da scaricare con {self.workers} workers.")
+        log(f"⬇️ Avvio thread di download playlist. {len(self.playlist_videos)} video da scaricare STRETTAMENTE SEQUENZIALMENTE.")
+        # Avvio il thread che eseguirà il ciclo di download sincrono
         threading.Thread(target=self._download_playlist_thread, daemon=True).start()
 
-    # [NUOVO] Worker per il download del singolo video
     def _download_single_video_worker(self, video_index):
+        """[FIX METADATA] Esegue il download di un singolo video in modo sincrono."""
         video = self.playlist_videos[video_index]
         video_number = video_index + 1
         url = video["url"]
         title = video["title"]
         download_directory = self.download_dir.get()
 
-        log(f"--- Avvio worker per {video_number}: '{title}' ---")
+        log(f"--- Avvio download {video_number}/{len(self.playlist_videos)}: '{title}' ({url}) ---")
         
-        # Manda messaggio alla UI per colorare la riga
+        # Aggiorna subito lo stato della GUI (tramite coda)
         self.master.queue.put(("playlist_progress_update", (video_index, "start")))
 
+        # outtmpl per playlist: include il numero del video per l'ordinamento
         outtmpl = os.path.join(download_directory, f"{video_number}. %(title)s.%(ext)s")
         
-        # [MODIFICATO] Aggiunta metadati con numero traccia
+        # Gestione condizionale dei metadati
         postprocessors = [
-            {"key":"FFmpegExtractAudio","preferredcodec": self.format.get(),"preferredquality": "320"},
-            {"key": "EmbedMetadata", "add_metadata": True}
+            {"key":"FFmpegExtractAudio","preferredcodec": self.format.get(),"preferredquality": "320"}
         ]
 
         ydl_opts = {
@@ -640,13 +660,22 @@ class PlaylistDownloader(ttk.Toplevel):
             "quiet": True,
             "noplaylist": True,
             "ffmpeg_location": os.path.dirname(FFMPEG_PATH),
-            "postprocessors": postprocessors,
-            # Setta Titolo, Album (da uploader) e Numero Traccia
-            "postprocessor_args": {
-                'metadata': f'title="%(title)s", album="%(uploader)s", track="{video_number}"'
-            },
         }
+        
+        # *** FIX CRITICO: Disabilita EmbedMetadataPP per WAV (e aggiungi track) ***
+        if SETTINGS.get("write_id3_tags", True):
+            if self.format.get().lower() == "wav":
+                log(f"⚠️ Scrittura tag ID3 disabilitata per WAV (video {video_number}) per evitare l'errore 'EmbedMetadataPP'.")
+            else:
+                log(f"Scrittura tag ID3 abilitata per playlist (video {video_number}).")
+                postprocessors.append({"key": "EmbedMetadata", "add_metadata": True})
+                # Imposto il tag "track" e "album" (uploader) come richiesto per i metadati in ordine
+                ydl_opts["postprocessor_args"] = {
+                    'metadata': f'title="%(title)s", album="%(uploader)s", track="{video_number}"'
+                }
 
+        ydl_opts["postprocessors"] = postprocessors # Aggiungo la lista aggiornata
+        
         speed_limit = SETTINGS["speed_limit"]
         if speed_limit != "0":
             ydl_opts["ratelimit"] = speed_limit
@@ -654,80 +683,80 @@ class PlaylistDownloader(ttk.Toplevel):
         try:
             with YoutubeDL(ydl_opts) as ydl:
                 ydl.extract_info(url, download=True)
-            log(f"--- ✅ Download {video_number}/{len(self.playlist_videos)} completato: {title} ---")
-            self.master.queue.put(("playlist_progress_update", (video_index, "done")))
+            log(f"--- ✅ Download {video_number} completato: {title} ---")
             return True
 
         except Exception as e:
             log(f"--- ❌ Errore download {video_number} ({title}): {e} ---")
-            self.master.queue.put(("playlist_progress_update", (video_index, "failed")))
             return False
-        
-        finally:
-            # [NUOVO] Aggiorna il contatore generale in modo thread-safe
-            with self.download_lock:
-                self.completed_count += 1
-                current_done = self.completed_count
-                total = len(self.playlist_videos)
-                # Manda aggiornamento per la barra di progresso generale
-                self.master.queue.put(("playlist_overall_progress", (current_done, total)))
 
 
-    # [MODIFICATO] Thread principale che gestisce l'executor
     def _download_playlist_thread(self):
+        """Esegue il ciclo di download sequenziale nel thread secondario."""
         total_videos = len(self.playlist_videos)
         self.completed_count = 0
         
-        log(f"📁 Download playlist verso: {self.download_dir.get()}")
-        self.status.set(T["playlist_status_downloading"].format(current=self.workers, done=0, total=total_videos))
+        log(f"Inizio ciclo di download playlist verso: {self.download_dir.get()}. Modalità Sequenziale.")
 
-        # Usa ThreadPoolExecutor per i download concorrenti
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.workers) as executor:
-            # Sottomette tutti i task
-            # Passiamo solo l'indice per evitare problemi con oggetti (es. Toplevel)
-            futures = [executor.submit(self._download_single_video_worker, i) for i in range(total_videos)]
+        for i in range(total_videos):
+            video_success = self._download_single_video_worker(i)
             
-            # Attende il completamento di tutti i task
-            concurrent.futures.wait(futures)
+            if video_success:
+                self.completed_count += 1
+                self.master.queue.put(("playlist_progress_update", (i, "done")))
+            else:
+                self.master.queue.put(("playlist_progress_update", (i, "failed")))
 
-        # Tutti i download (o tentativi) sono terminati
-        log(f"✅ Esecuzione ThreadPool completata. {self.completed_count} tasks processati.")
-        # Manda il messaggio finale
+            # Aggiorna lo stato generale (indice del video completato o fallito)
+            self.master.queue.put(("playlist_overall_progress", (i + 1, total_videos, self.completed_count)))
+            
+            # Necessario un piccolo ritardo per l'aggiornamento della GUI se l'elemento è piccolo e veloce
+            time.sleep(0.5) 
+
+        log(f"✅ Esecuzione download playlist completata. {self.completed_count} video scaricati con successo.")
         self.master.queue.put(("playlist_done", self.completed_count))
 
 
     def _loop(self):
-        """Gestisce il loop degli eventi per la finestra della playlist."""
+        """Gestisce il loop degli eventi per la finestra della playlist (solo aggiornamento UI)."""
         try:
             while True:
                 typ, payload = self.master.queue.get_nowait()
                 
                 if typ == "playlist_progress_update":
-                    # Aggiorna il colore della riga nel treeview
                     video_index, status = payload
                     try:
+                        iid = str(video_index)
+                        
+                        # --- FIX BUG Treeview tag_remove ---
+                        # Rimuovo tutti i tag noti prima di aggiungerne uno nuovo (gestendo l'errore)
+                        tags_to_remove = ('downloading_tag', 'done_tag', 'failed_tag')
+                        current_tags = list(self.tree.item(iid, 'tags')) # Ottieni i tag correnti
+                        
+                        # Rimuove i tag se sono presenti
+                        new_tags = [t for t in current_tags if t not in tags_to_remove]
+                        
                         if status == "start":
-                            self.tree.tag_add('downloading_tag', video_index)
+                            new_tags.append('downloading_tag')
                         elif status == "done":
-                            self.tree.tag_remove('downloading_tag', video_index)
-                            self.tree.tag_add('done_tag', video_index)
+                            new_tags.append('done_tag')
                         elif status == "failed":
-                            self.tree.tag_remove('downloading_tag', video_index)
-                            self.tree.tag_add('failed_tag', video_index)
+                            new_tags.append('failed_tag')
+                            
+                        self.tree.item(iid, tags=new_tags)
+                        # --- FINE FIX ---
+                        
                     except Exception as e:
                         log(f"Errore aggiornamento tag treeview playlist: {e}")
 
                 elif typ == "playlist_overall_progress":
-                    # Aggiorna la barra di progresso generale
-                    current_done, total = payload
-                    self.overall_progress_value.set(current_done)
-                    self.overall_progress_text.set(f"{current_done}/{total} video scaricati.")
+                    current_idx_processed, total, completed_count = payload
+                    self.overall_progress_value.set(current_idx_processed)
+                    self.overall_progress_text.set(f"{completed_count}/{total} video scaricati (processato: {current_idx_processed}/{total})")
                     
-                    # Aggiorna status bar (per mostrare il conteggio)
-                    if self.downloading:
+                    if self.downloading and current_idx_processed <= total:
                          self.status.set(T["playlist_status_downloading"].format(
-                             current=min(self.workers, total - current_done), 
-                             done=current_done, 
+                             current=current_idx_processed, 
                              total=total
                          ))
 
@@ -738,7 +767,7 @@ class PlaylistDownloader(ttk.Toplevel):
                     self.btn_download.config(state=DISABLED)
                     self.downloading = False
                     
-                    messagebox.showinfo(T["playlist_title"], T["playlist_status_complete"])
+                    Messagebox.show_info(T["playlist_status_complete"], title=T["playlist_title"], parent=self)
                     self.destroy()
                 
                 elif typ == "playlist_error":
@@ -746,19 +775,17 @@ class PlaylistDownloader(ttk.Toplevel):
                     messagebox.showerror("Errore Playlist", payload)
                 
                 else:
-                    # Rimetto in coda gli eventi non gestiti da questa finestra
                     self.master.queue.put_nowait((typ, payload))
         except queue.Empty:
             pass
         
-        # [MODIFICATO] Loop più rapido per UI più reattiva
         self.after(100, self._loop)
 
 # ---------------------- GUI PRINCIPALE ----------------------
 class YTDownloaderApp(ttk.Window):
     def __init__(self):
         super().__init__(themename=SETTINGS.get("theme", "superhero"))
-        self.title("Il Mangia's MUSIC WAVVER - V.2.7") # Versione aggiornata
+        self.title("Il Mangia's MUSIC WAVVER - V.2.8.2") 
         self.geometry("960x620")
 
         self.queue = queue.Queue()
@@ -769,16 +796,14 @@ class YTDownloaderApp(ttk.Window):
         self.status = tk.StringVar(value=T["ready"])
         self.search_max = tk.IntVar(value=10)
         
-        # Configurazione base dello stile
         self.style.configure('Treeview', rowheight=25)
         
-        log(f"🚀 GUI avviata. Versione: MUSIC WAVVER 2.7, Tema: {SETTINGS.get('theme')}, Lingua: {SETTINGS.get('language')}")
+        log(f"🚀 GUI avviata. Versione: MUSIC WAVVER 2.8.2, Tema: {SETTINGS.get('theme')}, Lingua: {SETTINGS.get('language')}")
 
         self._build_ui()
-        self._loop()
+        self.after(150, self._loop)
         log("🟢 Ciclo eventi Tkinter avviato")
         
-        # [NUOVO] Avvia il controllo aggiornamenti dopo che la GUI è partita
         self.after(500, self.check_for_updates)
 
 
@@ -790,8 +815,9 @@ class YTDownloaderApp(ttk.Window):
         top = ttk.Frame(frm)
         top.pack(fill=X)
         ttk.Label(top, text=T["welcome"], font=("Segoe UI", 18, "bold")).pack(side=LEFT)
-        ttk.Button(top, text=T["settings"], bootstyle=INFO, command=self.open_settings).pack(side=RIGHT, padx=6)
-        ttk.Button(top, text=T["open_log"], bootstyle=SECONDARY, command=self.open_log).pack(side=RIGHT)
+        ttk.Button(top, text=T["settings"], bootstyle=INFO, command=self.open_settings).pack(side=RIGHT, padx=(6, 0)) 
+        ttk.Button(top, text=T["open_log"], bootstyle=SECONDARY, command=self.open_log).pack(side=RIGHT, padx=(0, 5)) 
+        ttk.Button(top, text=T["open_playlist_log"], bootstyle=SECONDARY, command=self.open_playlist_log).pack(side=RIGHT, padx=(0, 5)) 
 
         # Search
         row1 = ttk.Frame(frm)
@@ -854,19 +880,16 @@ class YTDownloaderApp(ttk.Window):
         self.btn_play.config(state=DISABLED)
         self.status.set(T["searching"])
         log(f"🔎 Avvio thread di ricerca per: '{q}'")
-        # Se non è una playlist, avvio la ricerca/estrazione normale
         threading.Thread(target=self._search_thread, args=(q, int(self.search_max.get())), daemon=True).start()
 
     def handle_playlist_prompt(self, url):
         video_id = extract_video_id(url)
         
         if not video_id:
-            # È solo un URL di playlist (es. /playlist?list=...)
             log(T["playlist_prompt_error_no_v"])
             PlaylistDownloader(self, url)
             return
 
-        # È un URL di riproduzione che contiene anche un parametro 'list='
         win = ttk.Toplevel(self)
         win.title(T["playlist_prompt_title"])
         win.geometry("400x150")
@@ -889,11 +912,11 @@ class YTDownloaderApp(ttk.Window):
         ttk.Button(win, text=T["playlist_prompt_single"], command=download_single, bootstyle=INFO).pack(pady=5, padx=10, fill=X)
         ttk.Button(win, text=T["playlist_prompt_full"], command=download_full, bootstyle=SUCCESS).pack(pady=5, padx=10, fill=X)
 
-        win.protocol("WM_DELETE_WINDOW", win.destroy) # Permette la chiusura normale
+        win.protocol("WM_DELETE_WINDOW", win.destroy)
 
     def _search_thread(self, q, maxr):
         try:
-            results = search_youtube(q, max_results=maxr)
+            results = search_youtube(q, max_results=maxr, timeout_seconds=SETTINGS["search_timeout"])
             self.results = results
             self.tree.delete(*self.tree.get_children())
             for r in results:
@@ -930,10 +953,11 @@ class YTDownloaderApp(ttk.Window):
         self.lock_ui(True)
         self.status.set(f"Scaricamento di {title}...")
 
+        # FIX CRITICO: Usa tree.item() invece di tree.tag_add() per assegnare il tag
         try:
-            self.tree.tag_add('downloading_tag', sel)
+            self.tree.item(sel, tags=('downloading_tag',))
         except Exception as e:
-            log(f"❌ Errore critico Treeview tag_add: {e}. Continuo il download.")
+            log(f"❌ Errore nella gestione dei tag della Treeview: {e}. Continuo il download.")
             
         log(f"⬇️ Avvio thread di download singolo per '{title}' ({url})")
         threading.Thread(target=self._download_thread, args=(url, self.format.get(), sel), daemon=True).start()
@@ -966,13 +990,38 @@ class YTDownloaderApp(ttk.Window):
             log(f"⚠️ Tentativo di riproduzione fallito. LAST_FILE: {LAST_FILE}")
             messagebox.showinfo("Errore", "Nessun file da riprodurre trovato.")
 
+    # ---------------------- Log viewer ----------------------
+    def open_log(self):
+        self._open_log_file(LOG_FILE, "Log del Programma")
+        
+    def open_playlist_log(self):
+        self._open_log_file(PLAYLIST_LOG_FILE, "Traccia URL Playlist")
+        
+    def _open_log_file(self, filename, title):
+        log(f"🧾 Apertura finestra {title}.")
+        if not os.path.exists(filename):
+            messagebox.showinfo("Log", f"Nessun file di {title} trovato.")
+            return
+        win = ttk.Toplevel(self)
+        win.title(title)
+        win.geometry("800x600")
+        txt = tk.Text(win, wrap="word", bg="#0b132b", fg="#e6e6e6", font=("Consolas", 10))
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                txt.insert("1.0", f.read())
+        except Exception as e:
+            txt.insert("1.0", f"Errore lettura log: {e}")
+            
+        txt.config(state="disabled")
+        txt.pack(fill=BOTH, expand=True, padx=8, pady=8)
+
     # ---------------------- Impostazioni ----------------------
     def open_settings(self):
         log("⚙️ Apertura finestra Impostazioni.")
         
         win = ttk.Toplevel(self)
         win.title("Impostazioni")
-        win.geometry("540x550") # [MODIFICATO] Aumentata altezza
+        win.geometry("540x500") 
         win.transient(self)
         win.grab_set()
 
@@ -986,11 +1035,13 @@ class YTDownloaderApp(ttk.Window):
 
         ttk.Separator(frm).pack(fill=X, pady=8)
         
-        # [NUOVO] Impostazioni per download concorrenti
-        ttk.Label(frm, text="Download playlist concorrenti:", font=("Segoe UI", 11, "bold")).pack(anchor=W, pady=(8, 2))
-        concurrent_entry = ttk.Entry(frm)
-        concurrent_entry.insert(0, str(SETTINGS.get("concurrent_playlist_downloads", 4)))
-        concurrent_entry.pack(fill=X)
+        # Opzione per tag ID3
+        ttk.Label(frm, text=T["write_id3_tags"], font=("Segoe UI", 11, "bold")).pack(anchor=W, pady=(8, 2))
+        self.write_tags_var = tk.BooleanVar(value=SETTINGS.get("write_id3_tags", True))
+        id3_check = ttk.Checkbutton(frm, variable=self.write_tags_var, text=T["yes_write_tags"], bootstyle="round-toggle")
+        id3_check.pack(anchor=W, pady=4)
+        ttk.Separator(frm).pack(fill=X, pady=8)
+
 
         ttk.Label(frm, text="Lingua:", font=("Segoe UI", 11, "bold")).pack(anchor=W, pady=(6, 2))
         lang_box = ttk.Combobox(frm, values=["it", "en", "es", "de"], state="readonly")
@@ -1019,25 +1070,18 @@ class YTDownloaderApp(ttk.Window):
             SETTINGS["language"] = lang_box.get()
             SETTINGS["theme"] = theme_box.get()
             SETTINGS["speed_limit"] = speed_entry.get().strip() or "0"
+            SETTINGS["write_id3_tags"] = self.write_tags_var.get()
             
             try:
                 SETTINGS["search_timeout"] = int(timeout_entry.get())
             except ValueError:
                 SETTINGS["search_timeout"] = 15
                 
-            try:
-                # [NUOVO] Salva download concorrenti
-                con_dls = int(concurrent_entry.get())
-                SETTINGS["concurrent_playlist_downloads"] = max(1, min(con_dls, 10)) # Limita tra 1 e 10
-            except ValueError:
-                SETTINGS["concurrent_playlist_downloads"] = 4
-
             save_settings()
             
             log(f"💾 Impostazioni salvate: {SETTINGS}")
             log(f"Le impostazioni cambiate erano: { {k: v for k, v in SETTINGS.items() if v != old_settings.get(k)} }")
             
-            # [MODIFICATO] Applica il tema live
             try:
                 self.style.theme_use(SETTINGS["theme"])
                 log(f"🎨 Tema applicato live: {SETTINGS['theme']}")
@@ -1060,26 +1104,7 @@ class YTDownloaderApp(ttk.Window):
             save_settings()
             log(f"📁 Cartella download aggiornata a: {d}")
 
-    # ---------------------- Log viewer ----------------------
-    def open_log(self):
-        log("🧾 Apertura finestra Log.")
-        if not os.path.exists(LOG_FILE):
-            messagebox.showinfo("Log", "Nessun log trovato.")
-            return
-        win = ttk.Toplevel(self)
-        win.title("Log del Programma")
-        win.geometry("800x600")
-        txt = tk.Text(win, wrap="word", bg="#0b132b", fg="#e6e6e6", font=("Consolas", 10))
-        try:
-            with open(LOG_FILE, "r", encoding="utf-8") as f:
-                txt.insert("1.0", f.read())
-        except Exception as e:
-            txt.insert("1.0", f"Errore lettura log: {e}")
-            
-        txt.config(state="disabled")
-        txt.pack(fill=BOTH, expand=True, padx=8, pady=8)
-
-    # ---------------------- [NUOVO] yt-dlp Updater ----------------------
+    # ---------------------- yt-dlp Updater ----------------------
     def check_for_updates(self):
         try:
             last_check_str = SETTINGS.get("last_update_check", "1970-01-01T00:00:00")
@@ -1092,7 +1117,6 @@ class YTDownloaderApp(ttk.Window):
                     self.run_updater()
                 else:
                     log(T["updater_skipped"])
-                    # Salva la data odierna per non richiederlo per altri 3 giorni
                     SETTINGS["last_update_check"] = datetime.now().isoformat()
                     save_settings()
             else:
@@ -1114,21 +1138,17 @@ class YTDownloaderApp(ttk.Window):
         self.updater_log_text.pack(fill=BOTH, expand=True, padx=10, pady=10)
         self.updater_log_text.config(state="disabled")
 
-        # Avvia il thread di aggiornamento
         threading.Thread(target=self._updater_thread, daemon=True).start()
-        # Avvia il loop per controllare la coda dell'updater
         self._check_updater_queue()
 
     def _updater_thread(self):
         log("Avvio thread subprocess per 'pip install --upgrade yt-dlp'")
         cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"]
         try:
-            # Esegui il processo e cattura l'output riga per riga
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
                                        text=True, encoding='utf-8', bufsize=1, universal_newlines=True, 
                                        creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)
 
-            # Invia l'output alla coda in tempo reale
             for line in process.stdout:
                 self.queue.put(("updater_log", line))
             
@@ -1141,6 +1161,7 @@ class YTDownloaderApp(ttk.Window):
                 self.queue.put(("updater_done", True))
             else:
                 log(f"❌ Aggiornamento yt-dlp fallito. Return code: {process.returncode}")
+                self.queue.put(("updater_log", f"\nERRORE CRITICO. Codice di ritorno: {process.returncode}\n"))
                 self.queue.put(("updater_done", False))
                 
         except Exception as e:
@@ -1167,16 +1188,14 @@ class YTDownloaderApp(ttk.Window):
                     else:
                         messagebox.showerror(T["updater_title"], T["updater_fail"], parent=self.updater_win)
                     self.updater_win.destroy()
-                    return # Termina il loop
+                    return
                 
                 else:
-                    # Metti da parte altri messaggi per il loop principale
                     self.queue.put_nowait((typ, payload))
 
         except queue.Empty:
-            pass # Continua a controllare
+            pass
         
-        # Richiama se stesso dopo 100ms
         self.updater_win.after(100, self._check_updater_queue)
 
     # ---------------------- Loop eventi ----------------------
@@ -1195,12 +1214,13 @@ class YTDownloaderApp(ttk.Window):
                     
                     if item_id:
                         try:
-                            self.tree.tag_remove('downloading_tag', item_id)
+                            # FIX CRITICO: Usa tree.item() per rimuovere il tag (imposta tags a tuple vuota)
+                            self.tree.item(item_id, tags=()) 
                         except Exception as e:
                             log(f"❌ Errore rimozione tag download completato: {e}")
                             
                     log("✅ Gestione evento 'done' (singolo). Download completato e UI sbloccata.")
-                    messagebox.showinfo("Completato", T["complete_msg"])
+                    Messagebox.show_info(T["complete_msg"], title="Completato")
                     self.after(5000, self.reset_ui)
                 
                 elif typ == "error":
@@ -1209,11 +1229,9 @@ class YTDownloaderApp(ttk.Window):
                     log(f"❌ Gestione evento 'error' (singolo). Errore: {payload}")
                     messagebox.showerror("Errore", payload)
                 
-                # [MODIFICATO] Ignora gli eventi della playlist (gestiti dal Toplevel)
                 elif typ.startswith("playlist_"):
                     pass
                 
-                # [MODIFICATO] Ignora gli eventi dell'updater (gestiti dal Toplevel)
                 elif typ.startswith("updater_"):
                     pass
 
