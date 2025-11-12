@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BY IL MANGIA - 11/11/2025 (Aggiornato e Corretto)
-MUSIC WAVVER 2.8.2 - YouTube Downloader avanzato con GUI ttkbootstrap (Playlist STRETTAMENTE SEQUENZIALE E TRACCIATA)
-MADE IN ITALY 🇮🇹 -
+BY IL MANGIA - 12/11/2025
+MUSIC WAVVER 2.7.5
+MADE IN ITALY 🇮🇹
 """
 
 import os
@@ -505,7 +505,7 @@ class PlaylistDownloader(ttk.Toplevel):
         self.overall_progress_text = tk.StringVar(value="")
         self.overall_progress_value = tk.DoubleVar(value=0)
 
-        log(f"🆕 Avvio PlaylistDownloader per URL: {url} (Modalità STRETTAMENTE SEQUENZIALE V.2.8.3)")
+        log(f"🆕 Avvio PlaylistDownloader per URL: {url} (Modalità STRETTAMENTE SEQUENZIALE V.2.7.5)")
 
         self._build_ui()
         # Rimuove il contenuto del file di tracciamento ad ogni nuovo avvio playlist
@@ -785,7 +785,7 @@ class PlaylistDownloader(ttk.Toplevel):
 class YTDownloaderApp(ttk.Window):
     def __init__(self):
         super().__init__(themename=SETTINGS.get("theme", "superhero"))
-        self.title("Il Mangia's MUSIC WAVVER - V.2.8.2") 
+        self.title("Il Mangia's MUSIC WAVVER - V.2.7.5") 
         self.geometry("960x620")
 
         self.queue = queue.Queue()
@@ -798,7 +798,7 @@ class YTDownloaderApp(ttk.Window):
         
         self.style.configure('Treeview', rowheight=25)
         
-        log(f"🚀 GUI avviata. Versione: MUSIC WAVVER 2.8.2, Tema: {SETTINGS.get('theme')}, Lingua: {SETTINGS.get('language')}")
+        log(f"🚀 GUI avviata. Versione: MUSIC WAVVER 2.7.5, Tema: {SETTINGS.get('theme')}, Lingua: {SETTINGS.get('language')}")
 
         self._build_ui()
         self.after(150, self._loop)
