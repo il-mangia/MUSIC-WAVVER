@@ -25,9 +25,9 @@ Developed with **Python 3**, **yt-dlp**, and **ttkbootstrap**, it combines a mod
 
 ## 🛠️ System Requirements
 
-- **Python 3.12+** (only required for source version)
-- **FFmpeg** (included in the package)
-- Works on **Windows**, **Linux**, and **macOS**
+- **DENO JS (yt_dlp)**: https://docs.deno.com/runtime/getting_started/installation/
+- **FFmpeg** (included in the zip)
+- Windows x64, Linux x64
 
 ---
 
