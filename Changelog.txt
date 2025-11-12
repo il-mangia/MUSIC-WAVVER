@@ -1,6 +1,7 @@
 MUSIC WAVVER - CHANGELOG
 
 v2.7.5 (Nov 2025)
+- Updated yt_dlp (u need duno for using wavver now)
 - Error fix
 - Removed auto ID3 for errors
 - More faster
@@ -59,6 +60,7 @@ v1.0 (2024) — First Beta Prototype
 
 ---
 By Il Mangia — 2025
+
 
 
 
