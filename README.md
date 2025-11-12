@@ -1,4 +1,4 @@
-# 🎧 Music Wavver V2.5  
+# 🎧 WELCOME IN MUSIC WAVVER
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
