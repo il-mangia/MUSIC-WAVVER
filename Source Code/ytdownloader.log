@@ -1,18 +1,2 @@
-2025-11-12 12:45:35,139 - FFmpeg path rilevato (locale): /home/ilmangia/Documenti/Wavver 2.0/ffmpeg/linux/ffmpeg
-2025-11-12 12:45:35,140 - 🚀 Avvio di MUSIC WAVVER (main)...
-2025-11-12 12:45:35,446 - 🚀 GUI avviata. Versione: MUSIC WAVVER 2.8.2, Tema: superhero, Lingua: it
-2025-11-12 12:45:35,480 - 🟢 Ciclo eventi Tkinter avviato
-2025-11-12 12:45:35,983 - yt-dlp è già aggiornato. Nessun controllo necessario.
-2025-11-12 12:45:42,908 - 🔒 UI Bloccata: True
-2025-11-12 12:45:42,909 - 🔎 Avvio thread di ricerca per: 'Una grande festa'
-2025-11-12 12:45:42,911 - 🔎 Avvio ricerca - Query: 'Una grande festa', Max risultati: 10
-2025-11-12 12:45:44,576 - ✅ Ricerca completata. Trovati 10 risultati.
-2025-11-12 12:45:44,644 - 🔒 UI Bloccata: False
-2025-11-12 12:45:47,476 - 🔒 UI Bloccata: True
-2025-11-12 12:45:47,477 - ⬇️ Avvio thread di download singolo per 'Luca Carboni - Una grande festa (Lyric Video)' (https://www.youtube.com/watch?v=SgW5mjH_gLs)
-2025-11-12 12:45:47,478 - ⬇️ Avvio download singolo - URL: https://www.youtube.com/watch?v=SgW5mjH_gLs, Formato: wav, Cartella: /home/ilmangia/Downloads, Limite velocità: 0
-2025-11-12 12:45:47,478 - ⚠️ Scrittura tag ID3 disabilitata per WAV (download singolo) per evitare l'errore 'EmbedMetadataPP'.
-2025-11-12 12:45:55,592 - ⚙️ Apertura finestra Impostazioni.
-2025-11-12 12:45:57,326 - ✅ Download singolo completato. File salvato in: /home/ilmangia/Downloads/Luca Carboni - Una grande festa (Lyric Video).wav
-2025-11-12 12:45:57,344 - 🔒 UI Bloccata: False
-2025-11-12 12:45:57,344 - ✅ Gestione evento 'done' (singolo). Download completato e UI sbloccata.
+2025-11-12 12:45:35,139 - FFmpeg path rilevato (locale): /ffmpeg/linux/ffmpeg
+2025-11-12 12:45:35,139 - {program log}
