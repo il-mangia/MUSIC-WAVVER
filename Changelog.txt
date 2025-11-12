@@ -1,5 +1,9 @@
 MUSIC WAVVER - CHANGELOG
 
+v2.7.5 (Nov 2025)
+- Error fix
+- Removed auto ID3 for errors
+- More faster
 
 v2.7-fix closed beta relase (Nov 2025)
 - Fixed download bug
@@ -55,6 +59,7 @@ v1.0 (2024) — First Beta Prototype
 
 ---
 By Il Mangia — 2025
+
 
 
 
