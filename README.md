@@ -37,12 +37,12 @@ Developed with **Python 3**, **yt-dlp**, and **ttkbootstrap**, it combines a mod
 ## 📦 Installation  
 
 ### 🪟 Windows  
-1. Download the latest `.zip` release.  
+1. [Download the latest `.zip` release](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)  
 2. Extract it into any folder.  
 3. **Important:** The executable and the `ffmpeg` folder must be in the same directory.  
 
 ### 🐧 Linux / macOS  
-1. Download the latest `.zip` release.  
+1. [Download the latest `.zip` release](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)  
 2. Extract it anywhere you want.  
 3. **Important:** The executable and the `ffmpeg` folder must be in the same directory.  
 
