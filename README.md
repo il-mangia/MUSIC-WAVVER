@@ -1,4 +1,4 @@
-# 🎧 WELCOME IN MUSIC WAVVER
+# 🎧 MUSIC WAVVER (new requirements)
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
@@ -28,9 +28,8 @@ Developed with **Python 3**, **yt-dlp**, and **ttkbootstrap**, it combines a mod
 
 ## 🛠️ System Requirements  
 
-- **DENO JS (yt_dlp):** [Official installation guide](https://docs.deno.com/runtime/getting_started/installation/)  
-- **FFmpeg** (included in the zip)  
-- Supported systems: **Windows x64** and **Linux x64**
+- **DENO JS (yt_dlp):** [Official installation guide](https://docs.deno.com/runtime/getting_started/installation/).
+- ffmpeg (How to install below).
 
 ---
 
@@ -39,12 +38,13 @@ Developed with **Python 3**, **yt-dlp**, and **ttkbootstrap**, it combines a mod
 ### 🪟 Windows  
 1. [Download the latest `.zip` release](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)  
 2. Extract it into any folder.  
-3. **Important:** The executable and the `ffmpeg` folder must be in the same directory.  
+3. **Important:** You need to install ffmpeg by cmd: (`winget install Gyan.FFmpeg`).
 
 ### 🐧 Linux / macOS  
 1. [Download the latest `.zip` release](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)  
-2. Extract it anywhere you want.  
-3. **Important:** The executable and the `ffmpeg` folder must be in the same directory.  
+2. Extract it anywhere you want. 
+3. **Important:** You need to install ffmpeg by cmd: (`sudo apt install ffmpeg`).
+4. make the file executable (`chmod +x file`) (where "file" is the one you extracted before).
 
 ---
 
