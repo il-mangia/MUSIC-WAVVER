@@ -1,2 +1,8 @@
-2025-11-12 12:45:35,139 - FFmpeg path rilevato (locale): /ffmpeg/linux/ffmpeg
-2025-11-12 12:45:35,139 - {program log}
+2025-11-29 11:08:10,498 - \u26a0\ufe0f ffmpeg locale non trovato, controllo presenza globale...
+2025-11-29 11:08:10,504 - \u2705 ffmpeg globale trovato: C:\Users\aless\AppData\Local\Microsoft\WinGet\Links\ffmpeg.EXE
+2025-11-29 11:08:10,505 - \U0001f680 Avvio di MUSIC WAVVER (main)...
+2025-11-29 11:08:10,577 - \U0001f680 GUI avviata. Versione: MUSIC WAVVER 2.8.0
+2025-11-29 11:08:10,916 - \U0001f7e2 Ciclo eventi Tkinter avviato
+2025-11-29 11:08:11,417 - yt-dlp è già aggiornato. Nessun controllo necessario.
+2025-11-29 11:08:12,408 - \u2699\ufe0f Apertura finestra Impostazioni.
+2025-11-29 11:08:18,186 - \U0001f4be Impostazioni salvate: {'download_dir': 'C:\\Users\\aless\\Downloads', 'theme': 'dark', 'speed_limit': '0', 'search_timeout': 15, 'agreement_accepted': True, 'language': 'it', 'last_update_check': '2025-11-29T10:49:36.795292', 'write_id3_tags': True, 'max_retries': 3, 'retry_delay': 5}
