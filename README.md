@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" width="150" alt="Music Wavver Logo"/>
+  <img src="Logo.png" width="150" alt="Music Wavver Logo"/>
 </p>
 
 <h1 align="center">🎧 MUSIC WAVVER</h1>
