@@ -286,7 +286,7 @@ def load_settings():
 
 def save_settings():
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(SETTINGS, f, indent=4)
+        json.dump(SETTINGS, f, indent=4) #JSON Saving with indent for readability, UTF-8 encoding.
 
 SETTINGS = load_settings()
 T = LANG.get(SETTINGS.get("language", "it"), LANG["it"])
@@ -307,7 +307,7 @@ def show_agreement():
         messagebox.showinfo(T["agreement_title"], T["agreement_close"])
         return False
 
-# ---------------------- FFMPEG ----------------------
+# ---------------------- FFMPEG ---------------------- Si assume che ffmpeg sia incluso nella cartella 'ffmpeg/linux', 'ffmpeg/win' o nel PATH
 def detect_ffmpeg():
     base = os.path.dirname(os.path.abspath(sys.argv[0]))
     sys_os = platform.system().lower()
@@ -327,17 +327,17 @@ def detect_ffmpeg():
     log(f"FFmpeg path rilevato (locale): {candidate}")
     return candidate
 
-FFMPEG_PATH = detect_ffmpeg()
+FFMPEG_PATH = detect_ffmpeg() # Percorso completo di ffmpeg
 
 # ---------------------- UTILITY ----------------------
-def is_playlist(url):
+def is_playlist(url): # Definisce se l'URL è una playlist, per aprire la finestra di download playlist
     """Controlla se l'URL è un link di playlist o di riproduzione con lista."""
     parsed = urlparse(url)
     query_params = parse_qs(parsed.query)
     
     if "playlist" in parsed.path:
         log("🔍 Rilevato URL come link playlist diretto.")
-        return True
+        return True # finisce la riga se trova 'playlist' nel path. 
 
     if "list" in query_params:
         log(f"🔍 Rilevato URL con parametro list={query_params['list'][0]}")
@@ -372,7 +372,7 @@ def _yt_search_worker(query, max_results, result_queue):
         with YoutubeDL(opts) as ydl:
             info = ydl.extract_info(search_query, download=False)
             
-            if not is_url:
+            if not is_url: # Ricerca generica, con 
                 results = []
                 for e in info.get("entries", []):
                     if e.get('id'):
@@ -403,7 +403,7 @@ def _yt_search_worker(query, max_results, result_queue):
 
 def search_youtube(query, max_results=10, timeout_seconds=15):
     rq = queue.Queue()
-    video_id = extract_video_id(query)
+    video_id = extract_video_id(query) # Estrae l'ID del video se presente, eccetto se protetto da copyright...
     
     if video_id and query.startswith("http"):
         query_to_search = f"https://www.youtube.com/watch?v={video_id}"
