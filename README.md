@@ -6,13 +6,13 @@
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
-**Developed and tested on Ubuntu 25.10 and Windows 11**  
-Made with ❤️ in **Italy 🇮🇹**
+**Developed and tested on Linux and Windows**  
+<p align="left" style=" font-weight: bold; font-size: 24px;">Made with ❤️ in Italy 🇮🇹. ✊ Free Palestine 🇵🇸</p>
 
 ---
 
 **Music Wavver** is a desktop application built to search, download, and convert high-quality audio tracks from YouTube with style and precision.  
-Developed with **Python 3**, **yt-dlp**, and **ttkbootstrap**, it combines a modern interface with a powerful backend for fast, stable, and reliable audio extraction.
+Developed with **Python 3**, **yt-dlp**, and **customtkinter**, it combines a modern interface with a powerful backend for fast, stable, and reliable audio extraction.
 
 ---
 
@@ -23,10 +23,9 @@ Developed with **Python 3**, **yt-dlp**, and **ttkbootstrap**, it combines a mod
   - **WAV** (Lossless)
   - **FLAC** (Lossless)
   - **MP3** (High quality, up to 320 kbps)
-- **Modern GUI:** Sleek and intuitive interface powered by `ttkbootstrap`, featuring a clean results table (**Treeview**) and responsive design.  
+- **Modern GUI:** Sleek and intuitive interface powered by `customtkinter`, featuring a clean results table (**Treeview**) and responsive design.  
 - **Advanced Control:** Real-time progress bar and download speed limiter (**Rate Limiting**).  
-- **Flexible Search:** Supports both keyword search and direct YouTube URL pasting.  
-- **AI Title Cleanup:** Automatically renames tracks into the “Artist – Title” format using **Google Gemini 1.5 Flash** (optional, user-provided API key).
+- **Flexible Search:** Supports both keyword search and direct YouTube URL pasting.
 
 ---
 
@@ -63,12 +62,11 @@ This ensures that every user understands their full legal responsibility regardi
 ### Copyright Notice  
 Users are solely responsible for verifying and complying with copyright laws and YouTube’s Terms of Service in their country.  
 By downloading any content through this software, the user confirms that they have the legal right, permission, or authorization to do so.  
-
-Music Wavver and its developer (“Il Mangia”) are **not liable** for any misuse, copyright infringement, or legal violation committed through this program.  
+Music Wavver and its developer are **not liable** for any misuse, copyright infringement, or legal violation committed through this program.  
 This tool is provided **“as is”**, and is intended for **personal, educational, and non-commercial use** only.  
 We do **not guarantee the legality** of downloading or converting any specific content.  
-Neither the developer of Music Wavver nor the maintainers of third-party libraries (including `yt-dlp` and `FFmpeg`) are responsible for how downloaded media is used.  
-All responsibility remains with the **end user**.
+Neither the developer of Music Wavver nor the maintainers of third-party libraries (including `yt-dlp`) are responsible for how downloaded media is used.  
+All responsibility remains with the **end user**. **The user accepted it at first launch with a graphic disclaimer.**
 
 ### About FFmpeg  
 FFmpeg is **not developed or owned** by this project.  
@@ -77,8 +75,8 @@ FFmpeg is an open-source project distributed under **LGPL/GPL**, depending on th
 
 We thank the FFmpeg team and community for their outstanding work.  
 For licensing details and source code, visit the [official FFmpeg website](https://ffmpeg.org).  
-By using Music Wavver, you accept the FFmpeg license terms.  
+By using Music Wavver, you automatically accept the terms of the FFmpeg license.
 
 ---
 
-**Developed in Italy 🇮🇹 — Built and Tested on Ubuntu 25.10 by Il Mangia — 2025**
+**Developed in Italy 🇮🇹 — Built and Tested on Linux by Il Mangia — 2025**
