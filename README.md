@@ -8,6 +8,7 @@
 
 **Developed and tested on Linux and Windows**  
 <p align="left" style=" font-weight: bold; font-size: 24px;">Made with ❤️ in Italy 🇮🇹. ✊ Free Palestine 🇵🇸</p>
+'#freemusic'
 
 ---
 
