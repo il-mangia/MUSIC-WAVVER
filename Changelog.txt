@@ -1,5 +1,16 @@
 MUSIC WAVVER - CHANGELOG
 
+v2.8.0 (Nov2025)
+- Using Customtkinter
+- System theme detection - automatically follows OS dark/light mode
+- Fixed Treeview styling - consistent white background with black text for results table
+- Professional icon integration - uses logo.ico for all windows
+- Logo support - displays logo.png in title bar
+- Improved button styling with modern hover effects
+- Increased timeouts from 15 to 30 seconds for better WiFi performance
+- Enhanced retry system for slow connections (3 attempts with configurable delays)
+- FFmpeg pre-launch check - detects missing FFmpeg before showing license agreement
+
 v2.7.5 (Nov 2025)
 - Updated yt_dlp (u need duno for using wavver now)
 - Error fix
@@ -60,6 +71,7 @@ v1.0 (2024) — First Beta Prototype
 
 ---
 By Il Mangia — 2025
+
 
 
 
