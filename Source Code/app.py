@@ -91,7 +91,6 @@ DEFAULT_SETTINGS = {
     "agreement_accepted": False,
     "language": "it",
     "last_update_check": "1970-01-01T00:00:00",
-    "write_id3_tags": True,
     "max_retries": 3,
     "retry_delay": 5
 }
@@ -351,16 +350,6 @@ def download_with_yt_dlp(url, fmt, out_dir, speed_limit, progress_cb=None):
                 "socket_timeout": 30,
                 "extractor_retries": 3
             }
-            
-            if SETTINGS.get("write_id3_tags", True):
-                if fmt.lower() != "wav": 
-                    log("Scrittura tag ID3 abilitata per download singolo.")
-                    ydl_opts["postprocessors"].append({"key": "EmbedMetadata", "add_metadata": True})
-                    ydl_opts["postprocessor_args"] = {
-                        'metadata': 'title="%(title)s", album="%(uploader)s"'
-                    }
-                else:
-                    log("⚠️ Scrittura tag ID3 disabilitata per WAV (download singolo) per evitare l'errore 'EmbedMetadataPP'.")
 
             if speed_limit != "0":
                 ydl_opts["ratelimit"] = speed_limit
@@ -573,15 +562,6 @@ class PlaylistDownloader(ctk.CTkToplevel):
             "socket_timeout": 30,
             "extractor_retries": 3
         }
-        
-        if SETTINGS.get("write_id3_tags", True):
-            if self.format.get().lower() == "wav":
-                log(f"⚠️ Scrittura tag ID3 disabilitata per WAV (video {video_number})")
-            else:
-                postprocessors.append({"key": "EmbedMetadata", "add_metadata": True})
-                ydl_opts["postprocessor_args"] = {
-                    'metadata': f'title="%(title)s", album="%(uploader)s", track="{video_number}"'
-                }
 
         ydl_opts["postprocessors"] = postprocessors
         
@@ -1036,11 +1016,7 @@ class YTDownloaderApp(ctk.CTk):
         self.dir_label = ctk.CTkLabel(dir_frame, text=SETTINGS["download_dir"], wraplength=480)
         self.dir_label.grid(row=0, column=0, sticky="w", padx=10, pady=8)
         ctk.CTkButton(dir_frame, text=T("change_folder"), command=lambda: self.change_dir(win), width=80).grid(row=0, column=1, padx=10, pady=8)
-
-        ctk.CTkLabel(win, text=T("write_id3_tags"), font=("Segoe UI", 14, "bold")).grid(row=2, column=0, sticky="w", pady=(20, 5), padx=20)
-        self.write_tags_var = ctk.BooleanVar(value=SETTINGS.get("write_id3_tags", True))
-        ctk.CTkCheckBox(win, variable=self.write_tags_var, text=T("yes_write_tags")).grid(row=3, column=0, sticky="w", padx=20, pady=5)
-
+        
         ctk.CTkLabel(win, text=T("language_label"), font=("Segoe UI", 14, "bold")).grid(row=4, column=0, sticky="w", pady=(20, 5), padx=20)
         self.lang_var = ctk.StringVar(value=SETTINGS.get("language", "it"))
         lang_combo = ctk.CTkComboBox(win, variable=self.lang_var, values=["it", "en", "es", "de"], state="readonly")
@@ -1075,7 +1051,6 @@ class YTDownloaderApp(ctk.CTk):
         SETTINGS["language"] = self.lang_var.get()
         SETTINGS["theme"] = self.theme_var.get()
         SETTINGS["speed_limit"] = self.speed_var.get().strip() or "0"
-        SETTINGS["write_id3_tags"] = self.write_tags_var.get()
         
         try:
             SETTINGS["search_timeout"] = int(self.timeout_var.get())
