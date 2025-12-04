@@ -1,6 +1,9 @@
 MUSIC WAVVER - CHANGELOG
+v2.9.0 (Dic 2025)
+- MP3 ID3 Tagger From Original Sources
+- Faster
 
-v2.8.0 (Nov2025)
+v2.8.0 (Nov 2025)
 - Using Customtkinter
 - System theme detection - automatically follows OS dark/light mode
 - Fixed Treeview styling - consistent white background with black text for results table
@@ -71,6 +74,7 @@ v1.0 (2024) — First Beta Prototype
 
 ---
 By Il Mangia — 2025
+
 
 
 
