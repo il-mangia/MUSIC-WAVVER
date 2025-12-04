@@ -40,7 +40,7 @@ Developed with **Python 3**, **yt-dlp**, and **customtkinter**, it combines a mo
 ## 📦 Installation  
 
 ### 🪟 Windows  
-1. [Download the latest `.zip` release](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)  
+1. [Download the latest `.exe` installer](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)  
 2. Extract it into any folder.  
 3. **Important:** You need to install ffmpeg by cmd: (`winget install Gyan.FFmpeg`) and press yes duing installation.
 
@@ -48,7 +48,7 @@ Developed with **Python 3**, **yt-dlp**, and **customtkinter**, it combines a mo
 1. [Download the latest `.zip` release](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)  
 2. Extract it anywhere you want. 
 3. **Important:** You need to install ffmpeg by cmd: (`sudo apt install ffmpeg -y`).
-4. make the file executable (`chmod +x file`) (where "file" is the one you extracted before).
+4. Make the file executable (`chmod +x file`) (where "file" is the one you extracted before).
 
 ---
 
