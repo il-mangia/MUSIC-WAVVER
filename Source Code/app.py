@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BY IL MANGIA - 29/11/2025
-MUSIC WAVVER 2.8.0
+BY IL MANGIA - 04/12/2025
+MUSIC WAVVER 2.9.0
 MADE IN ITALY 🇮🇹
 """
 
@@ -16,15 +16,19 @@ import platform
 import time
 import shutil
 import re
+import requests
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 import subprocess
-
+import io
+from base64 import b64encode
 import customtkinter as ctk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox, filedialog, ttk
 from tkinter.ttk import Treeview, Style
 from yt_dlp import YoutubeDL
-from PIL import Image
+from PIL import Image, ImageTk
+from mutagen.mp3 import MP3
+from mutagen.id3 import ID3, TIT2, TPE1, TALB, TYER, TCON, APIC, error
 
 # ---------------------- CONFIGURAZIONE CTK ----------------------
 ctk.set_appearance_mode("system")
@@ -92,7 +96,8 @@ DEFAULT_SETTINGS = {
     "language": "it",
     "last_update_check": "1970-01-01T00:00:00",
     "max_retries": 3,
-    "retry_delay": 5
+    "retry_delay": 5,
+    "write_id3": False  # Nuova impostazione per ID3 tag
 }
 
 # ---------------------- SETTINGS ----------------------
@@ -116,6 +121,465 @@ SETTINGS = load_settings()
 def T(key):
     lang = SETTINGS.get("language", "it")
     return LANGUAGES.get(lang, {}).get(key, LANGUAGES.get("it", {}).get(key, key))
+
+# ---------------------- FUNZIONI ID3 DEEZER ----------------------
+class DeezerID3Tagger:
+    def __init__(self):
+        self.api_base = "https://api.deezer.com"
+        
+    def clean_search_query(self, query):
+        """Pulisce la query di ricerca rimuovendo parole comuni e parentesi"""
+        # Rimuovi estensione file
+        query = os.path.splitext(query)[0]
+        
+        # Pattern per rimuovere testo tra parentesi (incluse parentesi tonde e quadre)
+        query = re.sub(r'[\[\(].*?[\]\)]', '', query)
+        
+        # Rimuovi parole comuni da YouTube
+        common_terms = [
+            'official', 'video', 'audio', 'lyric', 'lyrics', 'lyrical', 
+            'hq', 'hd', '4k', '1080p', '720p', 'full', 'song', 'version',
+            'oficial', 'vídeo', 'audio', 'letra', 'letras', 'kualitas',
+            'official video', 'official audio', 'music video', 'mv', 'clip',
+            'visualizer', 'visual', 'live', 'performance', 'remix', 'mix',
+            'cover', 'original', 'extended', 'radio edit'
+        ]
+        
+        # Crea pattern case-insensitive
+        pattern = r'\b(' + '|'.join(re.escape(term) for term in common_terms) + r')\b'
+        query = re.sub(pattern, '', query, flags=re.IGNORECASE)
+        
+        # Rimuovi spazi multipli e trim
+        query = re.sub(r'\s+', ' ', query).strip()
+        
+        # Rimuovi caratteri speciali ma mantieni spazi e trattini
+        query = re.sub(r'[^\w\s\-]', '', query)
+        
+        # Se la query è troppo corta dopo la pulizia, usa l'originale
+        if len(query) < 3:
+            query = os.path.splitext(query)[0]
+            query = re.sub(r'[^\w\s\-]', ' ', query)
+            query = re.sub(r'\s+', ' ', query).strip()
+        
+        log(f"🔍 Query pulita: '{query}'")
+        return query
+    
+    def search_track(self, query, limit=5):
+        """Cerca una traccia su Deezer"""
+        try:
+            # Pulisci la query prima della ricerca
+            clean_query = self.clean_search_query(query)
+            
+            url = f"{self.api_base}/search"
+            params = {"q": clean_query, "limit": limit}
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            tracks = []
+            for track in data.get("data", []):
+                tracks.append({
+                    "title": track.get("title", ""),
+                    "artist": track.get("artist", {}).get("name", ""),
+                    "album": track.get("album", {}).get("title", ""),
+                    "year": track.get("release_date", "").split("-")[0] if track.get("release_date") else "",
+                    "genre": track.get("genre", {}).get("name", "") if track.get("genre") else "",
+                    "cover_url": track.get("album", {}).get("cover_medium", ""),
+                    "track_number": track.get("track_position", ""),
+                    "duration": track.get("duration", 0)
+                })
+            
+            log(f"✅ Trovati {len(tracks)} risultati su Deezer per query: '{clean_query}'")
+            return tracks
+        except Exception as e:
+            log(f"❌ Errore ricerca Deezer: {e}")
+            return []
+    
+    def download_cover(self, url):
+        """Scarica la copertina dall'URL"""
+        try:
+            if not url:
+                return None
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            return response.content
+        except Exception as e:
+            log(f"⚠️ Errore download copertina: {e}")
+            return None
+    
+    def apply_id3_tags(self, filepath, metadata, cover_data=None):
+        """Applica i tag ID3 al file MP3"""
+        try:
+            audio = MP3(filepath, ID3=ID3)
+            
+            # Crea tag ID3 se non esistono
+            try:
+                audio.add_tags()
+            except error:
+                pass
+            
+            # Titolo
+            if metadata.get("title"):
+                audio.tags.add(TIT2(encoding=3, text=metadata["title"]))
+            
+            # Artista
+            if metadata.get("artist"):
+                audio.tags.add(TPE1(encoding=3, text=metadata["artist"]))
+            
+            # Album
+            if metadata.get("album"):
+                audio.tags.add(TALB(encoding=3, text=metadata["album"]))
+            
+            # Anno
+            if metadata.get("year"):
+                audio.tags.add(TYER(encoding=3, text=metadata["year"]))
+            
+            # Genere
+            if metadata.get("genre"):
+                audio.tags.add(TCON(encoding=3, text=metadata["genre"]))
+            
+            # Copertina
+            if cover_data:
+                audio.tags.add(APIC(
+                    encoding=3,
+                    mime='image/jpeg',
+                    type=3,  # 3 = front cover
+                    desc='Cover',
+                    data=cover_data
+                ))
+            
+            audio.save()
+            log(f"✅ Tag ID3 applicati a: {filepath}")
+            return True
+        except Exception as e:
+            log(f"❌ Errore applicazione tag ID3: {e}")
+            return False
+
+# ---------------------- FINESTRA METADATI DEEZER ----------------------
+class DeezerMetadataWindow(ctk.CTkToplevel):
+    def __init__(self, parent, filename, filepath, deezer_tagger):
+        super().__init__(parent)
+        self.title(T("id3_window_title"))
+        self.geometry("700x650")
+        self.transient(parent)
+        
+        # NON impostare grab_set qui - causerebbe errore su Linux
+        self.withdraw()  # Nascondi temporaneamente come fanno le altre finestre
+        
+        self.filename = filename
+        self.filepath = filepath
+        self.deezer_tagger = deezer_tagger
+        self.selected_metadata = None
+        self.cover_image = None
+        self.cover_data = None
+        
+        # Centra la finestra
+        self.update_idletasks()
+        x = (self.winfo_screenwidth() // 2) - (700 // 2)
+        y = (self.winfo_screenheight() // 2) - (650 // 2)
+        self.geometry(f"700x650+{x}+{y}")
+        
+        # Icona
+        try:
+            if os.path.exists("logo.ico"):
+                self.after(250, lambda: self.iconbitmap("logo.ico"))
+        except Exception:
+            pass
+        
+        self._build_ui()
+        self._search_metadata()
+        
+        # Mostra la finestra e imposta il grab DOPO che è pronta
+        self.after(100, self._show_window)
+    
+    def _show_window(self):
+        """Mostra la finestra e imposta il grab dopo che è pronta"""
+        self.deiconify()  # Rendi visibile
+        try:
+            self.grab_set()  # Ora può impostare il grab
+        except Exception as e:
+            log(f"⚠️ Grab fallito su DeezerMetadataWindow: {e}")
+            # Su Linux a volte grab_set fallisce, ma possiamo continuare comunque
+    
+    def _build_ui(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+        
+        # Titolo
+        title_frame = ctk.CTkFrame(self, fg_color="transparent")
+        title_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
+        title_frame.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(title_frame, text=T("id3_question").format(file=self.filename), 
+                    font=("Segoe UI", 16, "bold"), wraplength=600).grid(row=0, column=0, sticky="w")
+        
+        # Frame principale
+        main_frame = ctk.CTkFrame(self)
+        main_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
+        main_frame.grid_columnconfigure(1, weight=1)
+        main_frame.grid_rowconfigure(0, weight=1)
+        
+        # Lista risultati (sinistra)
+        left_frame = ctk.CTkFrame(main_frame)
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
+        left_frame.grid_columnconfigure(0, weight=1)
+        left_frame.grid_rowconfigure(1, weight=1)
+        
+        ctk.CTkLabel(left_frame, text=T("id3_search_results"), font=("Segoe UI", 14, "bold")).grid(row=0, column=0, sticky="w", padx=10, pady=(10, 5))
+        
+        # Treeview per risultati
+        tree_frame = ctk.CTkFrame(left_frame)
+        tree_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        tree_frame.grid_columnconfigure(0, weight=1)
+        tree_frame.grid_rowconfigure(0, weight=1)
+        
+        style = Style()
+        style.configure("Results.Treeview",
+            background="white",
+            foreground="black",
+            fieldbackground="white",
+            borderwidth=0,
+            highlightthickness=0,
+            rowheight=25
+        )
+        style.configure("Results.Treeview.Heading",
+            background="#f0f0f0",
+            foreground="black",
+            relief="flat"
+        )
+        
+        self.tree = Treeview(tree_frame, columns=("Title", "Artist", "Album"), 
+                           show="headings", style="Results.Treeview", height=8)
+        self.tree.column("Title", width=150, anchor="w")
+        self.tree.column("Artist", width=100, anchor="w")
+        self.tree.column("Album", width=100, anchor="w")
+        
+        self.tree.heading("Title", text=T("id3_title"))
+        self.tree.heading("Artist", text=T("id3_artist"))
+        self.tree.heading("Album", text=T("id3_album"))
+        
+        self.tree.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        self.tree.bind("<<TreeviewSelect>>", self._on_select_result)
+        
+        # Scrollbar per treeview
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        
+        # Dettagli (destra)
+        right_frame = ctk.CTkFrame(main_frame)
+        right_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
+        right_frame.grid_columnconfigure(1, weight=1)
+        
+        # Titolo dettagli
+        ctk.CTkLabel(right_frame, text=T("id3_selected_details"), 
+                    font=("Segoe UI", 14, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 15))
+        
+        # Copertina
+        self.cover_label = ctk.CTkLabel(right_frame, text=T("id3_no_cover"), 
+                                       width=150, height=150, corner_radius=8)
+        self.cover_label.grid(row=1, column=0, rowspan=4, padx=(10, 20), pady=(0, 20), sticky="n")
+        
+        # Campi metadati
+        row = 1
+        labels = [
+            (T("id3_title"), "title"),
+            (T("id3_artist"), "artist"),
+            (T("id3_album"), "album"),
+            (T("id3_year"), "year"),
+            (T("id3_genre"), "genre"),
+            (T("id3_track_num"), "track_number"),
+            (T("id3_duration"), "duration_formatted")
+        ]
+        
+        self.entry_vars = {}
+        for label_text, key in labels:
+            ctk.CTkLabel(right_frame, text=label_text + ":", 
+                        font=("Segoe UI", 11)).grid(row=row, column=1, sticky="w", padx=(0, 10), pady=2)
+            
+            var = ctk.StringVar()
+            entry = ctk.CTkEntry(right_frame, textvariable=var, width=250)
+            entry.grid(row=row, column=2, sticky="w", pady=2)
+            
+            self.entry_vars[key] = var
+            row += 1
+        
+        # Pulsanti
+        button_frame = ctk.CTkFrame(self, fg_color="transparent")
+        button_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=(10, 20))
+        button_frame.grid_columnconfigure(0, weight=1)
+        button_frame.grid_columnconfigure(1, weight=1)
+        button_frame.grid_columnconfigure(2, weight=1)
+        
+        self.btn_apply = ctk.CTkButton(button_frame, text=T("id3_apply"), 
+                                      command=self._apply_tags, state="disabled",
+                                      fg_color="#28a745", hover_color="#218838")
+        self.btn_apply.grid(row=0, column=0, padx=10)
+        
+        self.btn_cancel = ctk.CTkButton(button_frame, text=T("id3_cancel"), 
+                                       command=self.destroy)
+        self.btn_cancel.grid(row=0, column=1, padx=10)
+        
+        self.btn_manual = ctk.CTkButton(button_frame, text=T("id3_manual_edit"), 
+                                       command=self._enable_editing)
+        self.btn_manual.grid(row=0, column=2, padx=10)
+        
+        # Stato
+        self.status_label = ctk.CTkLabel(self, text=T("id3_searching"), 
+                                        font=("Segoe UI", 11, "italic"))
+        self.status_label.grid(row=3, column=0, sticky="w", padx=20, pady=(0, 10))
+    
+    def _search_metadata(self):
+        """Avvia ricerca metadati in thread separato"""
+        def search_thread():
+            # Usa il nome del file per la ricerca
+            search_query = self.filename
+            
+            results = self.deezer_tagger.search_track(search_query)
+            
+            self.after(0, lambda: self._update_results(results))
+        
+        threading.Thread(target=search_thread, daemon=True).start()
+    
+    def _update_results(self, results):
+        """Aggiorna la lista dei risultati"""
+        self.tree.delete(*self.tree.get_children())
+        
+        if not results:
+            self.status_label.configure(text=T("id3_no_results"))
+            return
+        
+        self.results = results
+        for i, track in enumerate(results):
+            duration_sec = track.get("duration", 0)
+            duration_str = f"{duration_sec//60}:{duration_sec%60:02d}" if duration_sec else ""
+            
+            self.tree.insert("", "end", iid=i, values=(
+                track.get("title", "")[:50],
+                track.get("artist", "")[:30],
+                track.get("album", "")[:30]
+            ))
+        
+        self.status_label.configure(text=T("id3_select_track"))
+    
+    def _on_select_result(self, event):
+        """Quando viene selezionato un risultato"""
+        selection = self.tree.selection()
+        if not selection:
+            return
+        
+        idx = int(selection[0])
+        track = self.results[idx]
+        self.selected_metadata = track
+        
+        # Aggiorna campi
+        self.entry_vars["title"].set(track.get("title", ""))
+        self.entry_vars["artist"].set(track.get("artist", ""))
+        self.entry_vars["album"].set(track.get("album", ""))
+        self.entry_vars["year"].set(track.get("year", ""))
+        self.entry_vars["genre"].set(track.get("genre", ""))
+        self.entry_vars["track_number"].set(str(track.get("track_number", "")))
+        
+        # Formatta durata
+        duration = track.get("duration", 0)
+        if duration:
+            minutes = duration // 60
+            seconds = duration % 60
+            self.entry_vars["duration_formatted"].set(f"{minutes}:{seconds:02d}")
+        else:
+            self.entry_vars["duration_formatted"].set("")
+        
+        # Scarica e mostra copertina
+        self._load_cover(track.get("cover_url", ""))
+        
+        # Abilita pulsante applica
+        self.btn_apply.configure(state="normal")
+    
+    def _load_cover(self, url):
+        """Carica la copertina dall'URL"""
+        def load_thread():
+            cover_data = self.deezer_tagger.download_cover(url)
+            self.cover_data = cover_data
+            
+            if cover_data:
+                try:
+                    image = Image.open(io.BytesIO(cover_data))
+                    image.thumbnail((150, 150))
+                    
+                    if ctk.get_appearance_mode() == "Dark":
+                        bg_color = "#2b2b2b"
+                    else:
+                        bg_color = "#f0f0f0"
+                    
+                    # Crea immagine con sfondo
+                    bg = Image.new("RGB", (150, 150), bg_color)
+                    x = (150 - image.width) // 2
+                    y = (150 - image.height) // 2
+                    bg.paste(image, (x, y))
+                    
+                    self.cover_image = ImageTk.PhotoImage(bg)
+                    self.after(0, lambda: self.cover_label.configure(
+                        image=self.cover_image, text=""
+                    ))
+                except Exception as e:
+                    log(f"⚠️ Errore caricamento immagine: {e}")
+                    self.after(0, lambda: self.cover_label.configure(
+                        text=T("id3_cover_error")
+                    ))
+        
+        threading.Thread(target=load_thread, daemon=True).start()
+    
+    def _enable_editing(self):
+        """Abilita la modifica manuale di tutti i campi"""
+        for entry_var in self.entry_vars.values():
+            # I CTkEntry sono già editabili di default
+            pass
+        
+        if not self.selected_metadata:
+            # Crea metadata vuoto se nessuno selezionato
+            self.selected_metadata = {
+                "title": "",
+                "artist": "",
+                "album": "",
+                "year": "",
+                "genre": "",
+                "track_number": "",
+                "duration": 0
+            }
+        
+        self.btn_apply.configure(state="normal")
+        self.status_label.configure(text=T("id3_manual_mode"))
+    
+    def _apply_tags(self):
+        """Applica i tag ID3 al file"""
+        # Raccogli dati dai campi
+        metadata = {
+            "title": self.entry_vars["title"].get().strip(),
+            "artist": self.entry_vars["artist"].get().strip(),
+            "album": self.entry_vars["album"].get().strip(),
+            "year": self.entry_vars["year"].get().strip(),
+            "genre": self.entry_vars["genre"].get().strip(),
+            "track_number": self.entry_vars["track_number"].get().strip()
+        }
+        
+        # Verifica che almeno titolo o artista siano presenti
+        if not metadata["title"] and not metadata["artist"]:
+            messagebox.showwarning(T("id3_warning_title"), 
+                                 T("id3_warning_empty"), parent=self)
+            return
+        
+        # Applica tag
+        success = self.deezer_tagger.apply_id3_tags(
+            self.filepath, metadata, self.cover_data
+        )
+        
+        if success:
+            messagebox.showinfo(T("id3_success_title"), 
+                              T("id3_success_msg"), parent=self)
+            self.destroy()
+        else:
+            messagebox.showerror(T("id3_error_title"), 
+                               T("id3_error_msg"), parent=self)
 
 # ---------------------- CONTROLLO FFMPEG ----------------------
 def show_ffmpeg_missing_error():
@@ -350,7 +814,6 @@ def download_with_yt_dlp(url, fmt, out_dir, speed_limit, progress_cb=None):
                 "socket_timeout": 30,
                 "extractor_retries": 3
             }
-
             if speed_limit != "0":
                 ydl_opts["ratelimit"] = speed_limit
                 
@@ -374,10 +837,11 @@ def download_with_yt_dlp(url, fmt, out_dir, speed_limit, progress_cb=None):
 class PlaylistDownloader(ctk.CTkToplevel):
     def __init__(self, master, url):
         super().__init__(master)
+        self.withdraw()  # Nascondi temporaneamente la finestra
+        
         self.title(T("playlist_title"))
         self.geometry("800x600")
         self.transient(master)
-        self.grab_set()
         
         self._set_icon()
 
@@ -388,7 +852,7 @@ class PlaylistDownloader(ctk.CTkToplevel):
         self.completed_count = 0
         
         self.download_dir = ctk.StringVar(value=SETTINGS["download_dir"])
-        self.format = ctk.StringVar(value="wav")
+        self.format = ctk.StringVar(value="mp3")  # MP3 come predefinito
         self.status = ctk.StringVar(value=T("playlist_status_fetching"))
         self.overall_progress_text = ctk.StringVar(value="")
         self.overall_progress_value = ctk.DoubleVar(value=0)
@@ -397,8 +861,20 @@ class PlaylistDownloader(ctk.CTkToplevel):
 
         self._build_ui()
         open(PLAYLIST_LOG_FILE, 'w').close()
+        
+        # Mostra la finestra e imposta il grab dopo che è pronta
+        self.after(100, self._show_window)
+        
         threading.Thread(target=self._search_playlist_thread, daemon=True).start()
         self.after(100, self._loop)
+
+    def _show_window(self):
+        """Mostra la finestra e imposta il grab"""
+        self.deiconify()  # Rendi visibile
+        try:
+            self.grab_set()   # Ora puoi impostare il grab
+        except Exception as e:
+            log(f"⚠️ Grab fallito: {e}")
 
     def _set_icon(self):
         try:
@@ -501,31 +977,30 @@ class PlaylistDownloader(ctk.CTkToplevel):
                     })
 
             self.playlist_videos = videos
-            self.tree.delete(*self.tree.get_children())
+            self.master.queue.put(("playlist_videos_loaded", len(videos)))
             
             if not self.playlist_videos:
-                self.status.set(T("playlist_error_no_videos"))
-                messagebox.showerror("Errore", T("playlist_error_no_videos"))
-                self.btn_download.configure(state="disabled")
+                self.master.queue.put(("playlist_error", T("playlist_error_no_videos")))
                 return
 
-            for i, video in enumerate(self.playlist_videos):
-                self.tree.insert("", "end", iid=i, values=(i+1, video["title"], video["duration"], video["uploader"]))
-
-            self.status.set(f"Trovati {len(self.playlist_videos)} video. Pronto per il download.")
-            self.overall_progress_text.set(f"0/{len(self.playlist_videos)} video scaricati.")
-            self.btn_download.configure(state="normal")
-            self.progress_bar.configure(maximum=len(self.playlist_videos))
-            log(f"✅ Trovati {len(self.playlist_videos)} video nella playlist.")
-
         except Exception as e:
-            self.status.set("Errore nel recupero della playlist")
+            error_msg = str(e)
+            # Ignora l'errore specifico ['maximum'] non supportato
+            if "'maximum'" in error_msg and "are not supported arguments" in error_msg:
+                log(f"⚠️ Errore yt-dlp ignorato: {error_msg}")
+                # Continua comunque, cerca di recuperare almeno alcuni video
+                self.master.queue.put(("playlist_videos_loaded", 0))
+                return
+            
             log(f"❌ Errore critico nel recupero playlist: {e}")
-            messagebox.showerror("Errore Playlist", str(e))
-            self.btn_download.configure(state="disabled")
+            self.master.queue.put(("playlist_error", str(e)))
 
     def _start_download(self):
         if self.downloading:
+            return
+
+        if not self.playlist_videos:
+            messagebox.showerror("Errore", "Nessun video trovato nella playlist", parent=self)
             return
 
         self.downloading = True
@@ -618,7 +1093,24 @@ class PlaylistDownloader(ctk.CTkToplevel):
             while True:
                 typ, payload = self.master.queue.get_nowait()
                 
-                if typ == "playlist_progress_update":
+                if typ == "playlist_videos_loaded":
+                    video_count = payload
+                    self.tree.delete(*self.tree.get_children())
+                    
+                    if video_count > 0:
+                        for i, video in enumerate(self.playlist_videos):
+                            self.tree.insert("", "end", iid=i, values=(i+1, video["title"], video["duration"], video["uploader"]))
+                        
+                        self.status.set(f"Trovati {video_count} video. Pronto per il download.")
+                        self.overall_progress_text.set(f"0/{video_count} video scaricati.")
+                        self.btn_download.configure(state="normal")
+                        self.progress_bar.configure(maximum=video_count)
+                        log(f"✅ Trovati {video_count} video nella playlist.")
+                    else:
+                        self.status.set("Playlist recuperata ma nessun video trovato o formato non supportato.")
+                        self.btn_download.configure(state="disabled")
+                
+                elif typ == "playlist_progress_update":
                     video_index, status = payload
                     try:
                         iid = str(video_index)
@@ -652,7 +1144,6 @@ class PlaylistDownloader(ctk.CTkToplevel):
                     log("✅ Download playlist completato.")
                     self.status.set(T("playlist_status_complete"))
                     self.overall_progress_text.set(f"{payload}/{len(self.playlist_videos)} video scaricati con successo.")
-                    # RIABILITA IL BOTTONE PRIMA DI CHIUDERE
                     self.btn_download.configure(state="normal")
                     self.downloading = False
                     
@@ -660,12 +1151,20 @@ class PlaylistDownloader(ctk.CTkToplevel):
                     self.destroy()
                 
                 elif typ == "playlist_error":
-                    log(f"❌ Errore playlist: {payload}")
-                    # RIABILITA IL BOTTONE PRIMA DI MOSTRARE L'ERRORE
-                    self.btn_download.configure(state="normal")
-                    self.downloading = False
-                    messagebox.showerror("Errore Playlist", payload)
-                    # NON CHIUDERE LA FINESTRA DOPO L'ERRORE
+                    error_msg = payload
+                    log(f"❌ Errore playlist: {error_msg}")
+                    self.btn_download.configure(state="disabled")
+                    
+                    # Se è l'errore ['maximum'], mostra un messaggio più soft
+                    if "'maximum'" in error_msg and "are not supported arguments" in error_msg:
+                        self.status.set("Playlist trovata ma con formato non completamente supportato.")
+                        messagebox.showwarning("Attenzione", 
+                            "La playlist è stata trovata ma potrebbe non essere completamente compatibile.\n"
+                            "Alcune informazioni potrebbero mancare. Puoi comunque provare a scaricare i video.",
+                            parent=self)
+                    else:
+                        self.status.set("Errore nel recupero della playlist")
+                        messagebox.showerror("Errore Playlist", error_msg, parent=self)
                 
                 else:
                     self.master.queue.put_nowait((typ, payload))
@@ -678,7 +1177,7 @@ class PlaylistDownloader(ctk.CTkToplevel):
 class YTDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Il Mangia's MUSIC WAVVER - V.2.8.0") 
+        self.title("Il Mangia's MUSIC WAVVER - V.2.9.0") 
         self.geometry("960x620")
         
         self._set_icon()
@@ -688,11 +1187,12 @@ class YTDownloaderApp(ctk.CTk):
         self.results = []
         self.downloading = False
         self.query = ctk.StringVar()
-        self.format = ctk.StringVar(value="wav")
+        self.format = ctk.StringVar(value="mp3")  # MP3 come predefinito
         self.status = ctk.StringVar(value=T("ready"))
         self.search_max = ctk.IntVar(value=10)
+        self.deezer_tagger = DeezerID3Tagger()
         
-        log(f"🚀 GUI avviata. Versione: MUSIC WAVVER 2.8.0")
+        log(f"🚀 GUI avviata. Versione: MUSIC WAVVER 2.9.0")
 
         self._build_ui()
         self.after(150, self._loop)
@@ -847,10 +1347,10 @@ class YTDownloaderApp(ctk.CTk):
             return
 
         win = ctk.CTkToplevel(self)
+        win.withdraw()  # Nascondi temporaneamente
         win.title(T("playlist_prompt_title"))
         win.geometry("400x150")
         win.transient(self)
-        win.grab_set()
         
         try:
             if os.path.exists("logo.ico"):
@@ -875,6 +1375,9 @@ class YTDownloaderApp(ctk.CTk):
         ctk.CTkButton(button_frame, text=T("playlist_prompt_single"), command=download_single, width=150).pack(side="left", padx=10)
         ctk.CTkButton(button_frame, text=T("playlist_prompt_full"), command=download_full, width=150, 
                      fg_color="#28a745", hover_color="#218838").pack(side="left", padx=10)
+        
+        # Mostra la finestra e imposta il grab dopo che è pronta
+        win.after(100, lambda: (win.deiconify(), win.grab_set()))
 
     def _search_thread(self, q, maxr):
         try:
@@ -924,8 +1427,16 @@ class YTDownloaderApp(ctk.CTk):
         try:
             def update_progress(p):
                 self.queue.put(("progress", p))
+            
             download_with_yt_dlp(url, fmt, SETTINGS["download_dir"], SETTINGS["speed_limit"], progress_cb=update_progress)
-            self.queue.put(("done", tree_item_id))
+            
+            # Dopo il download, verifica se dobbiamo gestire ID3 tag
+            global LAST_FILE
+            if fmt == "mp3" and SETTINGS.get("write_id3", False) and LAST_FILE and os.path.exists(LAST_FILE):
+                self.queue.put(("id3_prompt", (LAST_FILE, tree_item_id)))
+            else:
+                self.queue.put(("done", tree_item_id))
+                
         except Exception as e:
             self.queue.put(("error", str(e)))
 
@@ -994,10 +1505,10 @@ class YTDownloaderApp(ctk.CTk):
 
     def open_settings(self):
         win = ctk.CTkToplevel(self)
+        win.withdraw()  # Nascondi temporaneamente
         win.title(T("settings_title"))
-        win.geometry("540x600")
+        win.geometry("540x650")  # Aumentata altezza per nuova opzione
         win.transient(self)
-        win.grab_set()
         
         try:
             if os.path.exists("logo.ico"):
@@ -1016,7 +1527,7 @@ class YTDownloaderApp(ctk.CTk):
         self.dir_label = ctk.CTkLabel(dir_frame, text=SETTINGS["download_dir"], wraplength=480)
         self.dir_label.grid(row=0, column=0, sticky="w", padx=10, pady=8)
         ctk.CTkButton(dir_frame, text=T("change_folder"), command=lambda: self.change_dir(win), width=80).grid(row=0, column=1, padx=10, pady=8)
-        
+
         ctk.CTkLabel(win, text=T("language_label"), font=("Segoe UI", 14, "bold")).grid(row=4, column=0, sticky="w", pady=(20, 5), padx=20)
         self.lang_var = ctk.StringVar(value=SETTINGS.get("language", "it"))
         lang_combo = ctk.CTkComboBox(win, variable=self.lang_var, values=["it", "en", "es", "de"], state="readonly")
@@ -1027,18 +1538,28 @@ class YTDownloaderApp(ctk.CTk):
         theme_combo = ctk.CTkComboBox(win, variable=self.theme_var, values=["system", "dark", "light"], state="readonly")
         theme_combo.grid(row=7, column=0, sticky="ew", padx=20, pady=5)
 
-        ctk.CTkLabel(win, text=T("speed_limit_label"), font=("Segoe UI", 14, "bold")).grid(row=8, column=0, sticky="w", pady=(20, 5), padx=20)
+        # Nuova opzione ID3 Tag
+        ctk.CTkLabel(win, text="ID3 Tag", font=("Segoe UI", 14, "bold")).grid(row=8, column=0, sticky="w", pady=(20, 5), padx=20)
+        self.id3_var = ctk.BooleanVar(value=SETTINGS.get("write_id3", False))
+        id3_check = ctk.CTkCheckBox(win, text=T("id3_enable_label"), variable=self.id3_var, 
+                                   checkbox_width=20, checkbox_height=20)
+        id3_check.grid(row=9, column=0, sticky="w", padx=20, pady=5)
+
+        ctk.CTkLabel(win, text=T("speed_limit_label"), font=("Segoe UI", 14, "bold")).grid(row=10, column=0, sticky="w", pady=(20, 5), padx=20)
         self.speed_var = ctk.StringVar(value=SETTINGS.get("speed_limit", "0"))
         speed_entry = ctk.CTkEntry(win, textvariable=self.speed_var)
-        speed_entry.grid(row=9, column=0, sticky="ew", padx=20, pady=5)
+        speed_entry.grid(row=11, column=0, sticky="ew", padx=20, pady=5)
 
-        ctk.CTkLabel(win, text=T("search_timeout_label"), font=("Segoe UI", 14, "bold")).grid(row=10, column=0, sticky="w", pady=(20, 5), padx=20)
+        ctk.CTkLabel(win, text=T("search_timeout_label"), font=("Segoe UI", 14, "bold")).grid(row=12, column=0, sticky="w", pady=(20, 5), padx=20)
         self.timeout_var = ctk.StringVar(value=str(SETTINGS.get("search_timeout", 30)))
         timeout_entry = ctk.CTkEntry(win, textvariable=self.timeout_var)
-        timeout_entry.grid(row=11, column=0, sticky="ew", padx=20, pady=5)
+        timeout_entry.grid(row=13, column=0, sticky="ew", padx=20, pady=5)
 
         ctk.CTkButton(win, text=T("save_settings"), command=lambda: self.save_settings(win), 
-                     fg_color="#28a745", hover_color="#218838", height=40).grid(row=12, column=0, sticky="ew", padx=20, pady=20)
+                     fg_color="#28a745", hover_color="#218838", height=40).grid(row=14, column=0, sticky="ew", padx=20, pady=20)
+
+        # Mostra la finestra e imposta il grab dopo che è pronta
+        win.after(100, lambda: (win.deiconify(), win.grab_set()))
 
     def change_dir(self, parent_win):
         d = filedialog.askdirectory(initialdir=SETTINGS["download_dir"], title=T("select_download_folder"))
@@ -1050,6 +1571,7 @@ class YTDownloaderApp(ctk.CTk):
     def save_settings(self, win):
         SETTINGS["language"] = self.lang_var.get()
         SETTINGS["theme"] = self.theme_var.get()
+        SETTINGS["write_id3"] = self.id3_var.get()  # Salva nuova impostazione
         SETTINGS["speed_limit"] = self.speed_var.get().strip() or "0"
         
         try:
@@ -1180,6 +1702,29 @@ class YTDownloaderApp(ctk.CTk):
                     messagebox.showinfo("Completato", T("complete_msg"))
                     self.after(5000, self.reset_ui)
                 
+                elif typ == "id3_prompt":
+                    filepath, tree_item_id = payload
+                    filename = os.path.basename(filepath)
+                    
+                    # Prima completa lo stato UI
+                    self.downloading = False
+                    self.lock_ui(False)
+                    self.btn_play.configure(state="normal")
+                    self.progress.set(1.0)
+                    self.status.set(T("complete"))
+                    
+                    if tree_item_id:
+                        try:
+                            self.tree.item(tree_item_id, tags=()) 
+                        except Exception:
+                            pass
+                    
+                    # POI mostra la finestra ID3
+                    self.after(100, lambda: DeezerMetadataWindow(self, filename, filepath, self.deezer_tagger))
+                    
+                    # Non mostrare messaggio "Completato" qui - lo farà la finestra ID3
+                    self.after(3000, self.reset_ui)
+                
                 elif typ == "error":
                     self.downloading = False
                     self.lock_ui(False)
@@ -1203,6 +1748,8 @@ class YTDownloaderApp(ctk.CTk):
         self.progress.set(0)
         self.lock_ui(False)
         LAST_FILE = None
+        log("🟢 UI resettata e pronta per un nuovo download.")
+        print("Ui Bloccata con successo. Pronto per un nuovo download.")
 
 # ---------------------- MAIN ----------------------
 def main():
