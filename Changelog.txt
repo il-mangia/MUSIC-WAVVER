@@ -1,4 +1,9 @@
 MUSIC WAVVER - CHANGELOG
+
+v3.0 (Dic 2025)
+- Animation Startup
+- Faster, and minor bugs
+
 v2.9.0 (Dic 2025)
 - MP3 ID3 Tagger From Original Sources
 - Faster
@@ -74,6 +79,7 @@ v1.0 (2024) — First Beta Prototype
 
 ---
 By Il Mangia — 2025
+
 
 
 
