@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 BY IL MANGIA - 04/12/2025
-MUSIC WAVVER 2.9.0
+MUSIC WAVVER 3.0
 MADE IN ITALY 🇮🇹
 """
 
@@ -23,7 +23,7 @@ import subprocess
 import io
 from base64 import b64encode
 import customtkinter as ctk
-from tkinter import messagebox, filedialog, ttk
+from tkinter import messagebox, filedialog, ttk, PhotoImage
 from tkinter.ttk import Treeview, Style
 from yt_dlp import YoutubeDL
 from PIL import Image, ImageTk
@@ -86,9 +86,26 @@ def load_languages():
 
 LANGUAGES = load_languages()
 
+# ---------------------- DETECT OS ----------------------
+def get_linux_distro():
+    """Rileva la distribuzione Linux"""
+    try:
+        with open("/etc/os-release", "r") as f:
+            for line in f:
+                if line.startswith("ID="):
+                    return line.split("=")[1].strip().strip('"').lower()
+    except:
+        return "unknown"
+    return "unknown"
+
 # ---------------------- DEFAULT SETTINGS ----------------------
+if platform.system() == "Windows":
+    DEFAULT_DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Music", "Scaricati")
+else:
+    DEFAULT_DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Music", "Scaricati")
+
 DEFAULT_SETTINGS = {
-    "download_dir": os.path.join(os.path.expanduser("~"), "Downloads"),
+    "download_dir": DEFAULT_DOWNLOAD_DIR,
     "theme": "system",
     "speed_limit": "0",
     "search_timeout": 30,
@@ -97,7 +114,8 @@ DEFAULT_SETTINGS = {
     "last_update_check": "1970-01-01T00:00:00",
     "max_retries": 3,
     "retry_delay": 5,
-    "write_id3": False  # Nuova impostazione per ID3 tag
+    "write_id3": False,
+    "audio_quality": "320"
 }
 
 # ---------------------- SETTINGS ----------------------
@@ -122,13 +140,143 @@ def T(key):
     lang = SETTINGS.get("language", "it")
     return LANGUAGES.get(lang, {}).get(key, LANGUAGES.get("it", {}).get(key, key))
 
+# ---------------------- CONTROLLO FFMPEG (CROSS-PLATFORM) ----------------------
+def show_ffmpeg_missing_error_linux():
+    """Mostra finestra di errore per FFmpeg mancante su Linux"""
+    root = ctk.CTk()
+    root.title("FFmpeg Mancante")
+    root.geometry("600x450")
+    root.resizable(False, False)
+    
+    # Centra la finestra
+    root.update_idletasks()
+    x = (root.winfo_screenwidth() // 2) - (600 // 2)
+    y = (root.winfo_screenheight() // 2) - (450 // 2)
+    root.geometry(f"600x450+{x}+{y}")
+    
+    # Contenuto
+    frame = ctk.CTkFrame(root)
+    frame.pack(fill="both", expand=True, padx=20, pady=20)
+    
+    ctk.CTkLabel(frame, text="❌", font=("Segoe UI", 48)).pack(pady=(20, 10))
+    ctk.CTkLabel(frame, text="FFmpeg Non Trovato", font=("Segoe UI", 20, "bold")).pack(pady=(0, 20))
+    
+    # Istruzioni specifiche per Linux
+    instructions = "FFmpeg è necessario per il funzionamento di questo programma.\n\n"
+    instructions += "Per installare FFmpeg su Linux:\n\n"
+    
+    # Rileva la distribuzione
+    distro = get_linux_distro()
+    if distro in ["ubuntu", "debian", "linuxmint", "mint"]:
+        instructions += "Ubuntu/Debian/Mint:\n"
+        instructions += "  sudo apt update && sudo apt install ffmpeg -y\n\n"
+    elif distro in ["fedora", "rhel", "centos"]:
+        instructions += "Fedora/RHEL/CentOS:\n"
+        instructions += "  sudo dnf install ffmpeg -y\n\n"
+    elif distro in ["arch", "manjaro", "endeavouros"]:
+        instructions += "Arch/Manjaro:\n"
+        instructions += "  sudo pacman -S ffmpeg\n\n"
+    elif distro in ["opensuse", "tumbleweed"]:
+        instructions += "openSUSE:\n"
+        instructions += "  sudo zypper install ffmpeg\n\n"
+    else:
+        instructions += "Usa il gestore pacchetti della tua distribuzione:\n"
+        instructions += "  sudo [apt/dnf/pacman/zypper] install ffmpeg\n\n"
+    
+    instructions += "Dopo l'installazione, riavvia il programma."
+    
+    text_widget = ctk.CTkTextbox(frame, wrap="word", height=200, font=("Consolas", 12))
+    text_widget.pack(fill="both", expand=True, padx=10, pady=10)
+    text_widget.insert("1.0", instructions)
+    text_widget.configure(state="disabled")
+    
+    ctk.CTkButton(frame, text="Chiudi Applicazione", command=sys.exit, 
+                 fg_color="#dc3545", hover_color="#c82333", height=40).pack(pady=20)
+    
+    root.mainloop()
+
+def show_ffmpeg_missing_error_windows():
+    """Mostra finestra di errore per FFmpeg mancante su Windows"""
+    root = ctk.CTk()
+    root.title("FFmpeg Mancante")
+    root.geometry("600x400")
+    root.resizable(False, False)
+    
+    # Centra la finestra
+    root.update_idletasks()
+    x = (root.winfo_screenwidth() // 2) - (600 // 2)
+    y = (root.winfo_screenheight() // 2) - (400 // 2)
+    root.geometry(f"600x400+{x}+{y}")
+    
+    # Contenuto
+    frame = ctk.CTkFrame(root)
+    frame.pack(fill="both", expand=True, padx=20, pady=20)
+    
+    # Icona errore
+    ctk.CTkLabel(frame, text="❌", font=("Segoe UI", 48)).pack(pady=(20, 10))
+    
+    # Titolo
+    ctk.CTkLabel(frame, text="FFmpeg Non Trovato", font=("Segoe UI", 20, "bold")).pack(pady=(0, 20))
+    
+    # Istruzioni
+    instructions = "FFmpeg è necessario per il funzionamento di questo programma.\n\n"
+    instructions += "Per installare FFmpeg su Windows:\n\n"
+    instructions += "1. Apri PowerShell come Amministratore\n"
+    instructions += "2. Esegui questo comando:\n"
+    instructions += "   winget install Gyan.FFmpeg\n\n"
+    instructions += "Oppure scarica manualmente da:\n"
+    instructions += "https://www.gyan.dev/ffmpeg/builds/"
+    
+    text_widget = ctk.CTkTextbox(frame, wrap="word", height=200, font=("Consolas", 12))
+    text_widget.pack(fill="both", expand=True, padx=10, pady=10)
+    text_widget.insert("1.0", instructions)
+    text_widget.configure(state="disabled")
+    
+    # Pulsante chiudi
+    ctk.CTkButton(frame, text="Chiudi Applicazione", command=sys.exit, 
+                 fg_color="#dc3545", hover_color="#c82333", height=40).pack(pady=20)
+    
+    root.mainloop()
+
+def detect_ffmpeg():
+    """Controlla se FFmpeg è disponibile, altrimenti mostra finestra di errore"""
+    log("🔍 Controllo presenza FFmpeg...")
+    
+    # Prima cerca nel PATH di sistema
+    found = shutil.which("ffmpeg")
+    if found:
+        log(f"✅ ffmpeg trovato: {found}")
+        return found
+    
+    # Se non trovato, mostra errore specifico per OS
+    log("❌ FFmpeg non trovato nel sistema")
+    
+    current_os = platform.system().lower()
+    if current_os == "linux":
+        show_ffmpeg_missing_error_linux()
+    elif current_os == "windows":
+        show_ffmpeg_missing_error_windows()
+    else:  # macOS o altri
+        messagebox.showerror("FFmpeg Mancante", 
+                           "FFmpeg è necessario per il funzionamento di questo programma.\n\n"
+                           "Per installare FFmpeg su macOS:\n"
+                           "  brew install ffmpeg\n\n"
+                           "Per Linux:\n"
+                           "  sudo apt install ffmpeg  # Debian/Ubuntu\n"
+                           "  sudo dnf install ffmpeg  # Fedora\n"
+                           "  sudo pacman -S ffmpeg    # Arch")
+    
+    sys.exit(1)
+
+FFMPEG_PATH = detect_ffmpeg()
+
 # ---------------------- FUNZIONI ID3 DEEZER ----------------------
 class DeezerID3Tagger:
     def __init__(self):
         self.api_base = "https://api.deezer.com"
         
     def clean_search_query(self, query):
-        """Pulisce la query di ricerca rimuovendo parole comuni e parentesi"""
+        """Pulisci la query di ricerca rimuovendo parole comuni e parentesi"""
         # Rimuovi estensione file
         query = os.path.splitext(query)[0]
         
@@ -164,8 +312,8 @@ class DeezerID3Tagger:
         log(f"🔍 Query pulita: '{query}'")
         return query
     
-    def search_track(self, query, limit=5):
-        """Cerca una traccia su Deezer"""
+    def search_track(self, query, limit=1):
+        """Cerca una traccia su Deezer - restituisce solo il primo risultato"""
         try:
             # Pulisci la query prima della ricerca
             clean_query = self.clean_search_query(query)
@@ -255,404 +403,51 @@ class DeezerID3Tagger:
             log(f"❌ Errore applicazione tag ID3: {e}")
             return False
 
-# ---------------------- FINESTRA METADATI DEEZER ----------------------
-class DeezerMetadataWindow(ctk.CTkToplevel):
-    def __init__(self, parent, filename, filepath, deezer_tagger):
-        super().__init__(parent)
-        self.title(T("id3_window_title"))
-        self.geometry("700x650")
-        self.transient(parent)
-        
-        # NON impostare grab_set qui - causerebbe errore su Linux
-        self.withdraw()  # Nascondi temporaneamente come fanno le altre finestre
-        
-        self.filename = filename
-        self.filepath = filepath
-        self.deezer_tagger = deezer_tagger
-        self.selected_metadata = None
-        self.cover_image = None
-        self.cover_data = None
-        
-        # Centra la finestra
-        self.update_idletasks()
-        x = (self.winfo_screenwidth() // 2) - (700 // 2)
-        y = (self.winfo_screenheight() // 2) - (650 // 2)
-        self.geometry(f"700x650+{x}+{y}")
-        
-        # Icona
-        try:
-            if os.path.exists("logo.ico"):
-                self.after(250, lambda: self.iconbitmap("logo.ico"))
-        except Exception:
-            pass
-        
-        self._build_ui()
-        self._search_metadata()
-        
-        # Mostra la finestra e imposta il grab DOPO che è pronta
-        self.after(100, self._show_window)
+# ---------------------- FINESTRA METADATI DEEZER AUTOMATICA ----------------------
+def apply_deezer_id3_automatically(parent, filename, filepath, deezer_tagger):
+    """Applica automaticamente i metadati Deezer (primo risultato)"""
+    log(f"🔍 Ricerca automatica metadati per: {filename}")
     
-    def _show_window(self):
-        """Mostra la finestra e imposta il grab dopo che è pronta"""
-        self.deiconify()  # Rendi visibile
-        try:
-            self.grab_set()  # Ora può impostare il grab
-        except Exception as e:
-            log(f"⚠️ Grab fallito su DeezerMetadataWindow: {e}")
-            # Su Linux a volte grab_set fallisce, ma possiamo continuare comunque
+    # Usa il nome del file per la ricerca
+    search_query = filename
     
-    def _build_ui(self):
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
-        
-        # Titolo
-        title_frame = ctk.CTkFrame(self, fg_color="transparent")
-        title_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
-        title_frame.grid_columnconfigure(0, weight=1)
-        
-        ctk.CTkLabel(title_frame, text=T("id3_question").format(file=self.filename), 
-                    font=("Segoe UI", 16, "bold"), wraplength=600).grid(row=0, column=0, sticky="w")
-        
-        # Frame principale
-        main_frame = ctk.CTkFrame(self)
-        main_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
-        main_frame.grid_columnconfigure(1, weight=1)
-        main_frame.grid_rowconfigure(0, weight=1)
-        
-        # Lista risultati (sinistra)
-        left_frame = ctk.CTkFrame(main_frame)
-        left_frame.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
-        left_frame.grid_columnconfigure(0, weight=1)
-        left_frame.grid_rowconfigure(1, weight=1)
-        
-        ctk.CTkLabel(left_frame, text=T("id3_search_results"), font=("Segoe UI", 14, "bold")).grid(row=0, column=0, sticky="w", padx=10, pady=(10, 5))
-        
-        # Treeview per risultati
-        tree_frame = ctk.CTkFrame(left_frame)
-        tree_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
-        tree_frame.grid_columnconfigure(0, weight=1)
-        tree_frame.grid_rowconfigure(0, weight=1)
-        
-        style = Style()
-        style.configure("Results.Treeview",
-            background="white",
-            foreground="black",
-            fieldbackground="white",
-            borderwidth=0,
-            highlightthickness=0,
-            rowheight=25
-        )
-        style.configure("Results.Treeview.Heading",
-            background="#f0f0f0",
-            foreground="black",
-            relief="flat"
-        )
-        
-        self.tree = Treeview(tree_frame, columns=("Title", "Artist", "Album"), 
-                           show="headings", style="Results.Treeview", height=8)
-        self.tree.column("Title", width=150, anchor="w")
-        self.tree.column("Artist", width=100, anchor="w")
-        self.tree.column("Album", width=100, anchor="w")
-        
-        self.tree.heading("Title", text=T("id3_title"))
-        self.tree.heading("Artist", text=T("id3_artist"))
-        self.tree.heading("Album", text=T("id3_album"))
-        
-        self.tree.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        self.tree.bind("<<TreeviewSelect>>", self._on_select_result)
-        
-        # Scrollbar per treeview
-        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        self.tree.configure(yscrollcommand=scrollbar.set)
-        
-        # Dettagli (destra)
-        right_frame = ctk.CTkFrame(main_frame)
-        right_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
-        right_frame.grid_columnconfigure(1, weight=1)
-        
-        # Titolo dettagli
-        ctk.CTkLabel(right_frame, text=T("id3_selected_details"), 
-                    font=("Segoe UI", 14, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 15))
-        
-        # Copertina
-        self.cover_label = ctk.CTkLabel(right_frame, text=T("id3_no_cover"), 
-                                       width=150, height=150, corner_radius=8)
-        self.cover_label.grid(row=1, column=0, rowspan=4, padx=(10, 20), pady=(0, 20), sticky="n")
-        
-        # Campi metadati
-        row = 1
-        labels = [
-            (T("id3_title"), "title"),
-            (T("id3_artist"), "artist"),
-            (T("id3_album"), "album"),
-            (T("id3_year"), "year"),
-            (T("id3_genre"), "genre"),
-            (T("id3_track_num"), "track_number"),
-            (T("id3_duration"), "duration_formatted")
-        ]
-        
-        self.entry_vars = {}
-        for label_text, key in labels:
-            ctk.CTkLabel(right_frame, text=label_text + ":", 
-                        font=("Segoe UI", 11)).grid(row=row, column=1, sticky="w", padx=(0, 10), pady=2)
-            
-            var = ctk.StringVar()
-            entry = ctk.CTkEntry(right_frame, textvariable=var, width=250)
-            entry.grid(row=row, column=2, sticky="w", pady=2)
-            
-            self.entry_vars[key] = var
-            row += 1
-        
-        # Pulsanti
-        button_frame = ctk.CTkFrame(self, fg_color="transparent")
-        button_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=(10, 20))
-        button_frame.grid_columnconfigure(0, weight=1)
-        button_frame.grid_columnconfigure(1, weight=1)
-        button_frame.grid_columnconfigure(2, weight=1)
-        
-        self.btn_apply = ctk.CTkButton(button_frame, text=T("id3_apply"), 
-                                      command=self._apply_tags, state="disabled",
-                                      fg_color="#28a745", hover_color="#218838")
-        self.btn_apply.grid(row=0, column=0, padx=10)
-        
-        self.btn_cancel = ctk.CTkButton(button_frame, text=T("id3_cancel"), 
-                                       command=self.destroy)
-        self.btn_cancel.grid(row=0, column=1, padx=10)
-        
-        self.btn_manual = ctk.CTkButton(button_frame, text=T("id3_manual_edit"), 
-                                       command=self._enable_editing)
-        self.btn_manual.grid(row=0, column=2, padx=10)
-        
-        # Stato
-        self.status_label = ctk.CTkLabel(self, text=T("id3_searching"), 
-                                        font=("Segoe UI", 11, "italic"))
-        self.status_label.grid(row=3, column=0, sticky="w", padx=20, pady=(0, 10))
+    # Cerca metadatti (solo primo risultato)
+    results = deezer_tagger.search_track(search_query, limit=1)
     
-    def _search_metadata(self):
-        """Avvia ricerca metadati in thread separato"""
-        def search_thread():
-            # Usa il nome del file per la ricerca
-            search_query = self.filename
-            
-            results = self.deezer_tagger.search_track(search_query)
-            
-            self.after(0, lambda: self._update_results(results))
-        
-        threading.Thread(target=search_thread, daemon=True).start()
+    if not results:
+        log(f"⚠️ Nessun risultato Deezer trovato per: {filename}")
+        return False
     
-    def _update_results(self, results):
-        """Aggiorna la lista dei risultati"""
-        self.tree.delete(*self.tree.get_children())
-        
-        if not results:
-            self.status_label.configure(text=T("id3_no_results"))
-            return
-        
-        self.results = results
-        for i, track in enumerate(results):
-            duration_sec = track.get("duration", 0)
-            duration_str = f"{duration_sec//60}:{duration_sec%60:02d}" if duration_sec else ""
-            
-            self.tree.insert("", "end", iid=i, values=(
-                track.get("title", "")[:50],
-                track.get("artist", "")[:30],
-                track.get("album", "")[:30]
-            ))
-        
-        self.status_label.configure(text=T("id3_select_track"))
+    # Prendi il primo risultato
+    track = results[0]
     
-    def _on_select_result(self, event):
-        """Quando viene selezionato un risultato"""
-        selection = self.tree.selection()
-        if not selection:
-            return
-        
-        idx = int(selection[0])
-        track = self.results[idx]
-        self.selected_metadata = track
-        
-        # Aggiorna campi
-        self.entry_vars["title"].set(track.get("title", ""))
-        self.entry_vars["artist"].set(track.get("artist", ""))
-        self.entry_vars["album"].set(track.get("album", ""))
-        self.entry_vars["year"].set(track.get("year", ""))
-        self.entry_vars["genre"].set(track.get("genre", ""))
-        self.entry_vars["track_number"].set(str(track.get("track_number", "")))
-        
-        # Formatta durata
-        duration = track.get("duration", 0)
-        if duration:
-            minutes = duration // 60
-            seconds = duration % 60
-            self.entry_vars["duration_formatted"].set(f"{minutes}:{seconds:02d}")
-        else:
-            self.entry_vars["duration_formatted"].set("")
-        
-        # Scarica e mostra copertina
-        self._load_cover(track.get("cover_url", ""))
-        
-        # Abilita pulsante applica
-        self.btn_apply.configure(state="normal")
+    # Scarica copertina
+    cover_data = deezer_tagger.download_cover(track.get("cover_url", ""))
     
-    def _load_cover(self, url):
-        """Carica la copertina dall'URL"""
-        def load_thread():
-            cover_data = self.deezer_tagger.download_cover(url)
-            self.cover_data = cover_data
-            
-            if cover_data:
-                try:
-                    image = Image.open(io.BytesIO(cover_data))
-                    image.thumbnail((150, 150))
-                    
-                    if ctk.get_appearance_mode() == "Dark":
-                        bg_color = "#2b2b2b"
-                    else:
-                        bg_color = "#f0f0f0"
-                    
-                    # Crea immagine con sfondo
-                    bg = Image.new("RGB", (150, 150), bg_color)
-                    x = (150 - image.width) // 2
-                    y = (150 - image.height) // 2
-                    bg.paste(image, (x, y))
-                    
-                    self.cover_image = ImageTk.PhotoImage(bg)
-                    self.after(0, lambda: self.cover_label.configure(
-                        image=self.cover_image, text=""
-                    ))
-                except Exception as e:
-                    log(f"⚠️ Errore caricamento immagine: {e}")
-                    self.after(0, lambda: self.cover_label.configure(
-                        text=T("id3_cover_error")
-                    ))
-        
-        threading.Thread(target=load_thread, daemon=True).start()
+    # Applica tag ID3
+    metadata = {
+        "title": track.get("title", ""),
+        "artist": track.get("artist", ""),
+        "album": track.get("album", ""),
+        "year": track.get("year", ""),
+        "genre": track.get("genre", ""),
+        "track_number": str(track.get("track_number", ""))
+    }
     
-    def _enable_editing(self):
-        """Abilita la modifica manuale di tutti i campi"""
-        for entry_var in self.entry_vars.values():
-            # I CTkEntry sono già editabili di default
-            pass
-        
-        if not self.selected_metadata:
-            # Crea metadata vuoto se nessuno selezionato
-            self.selected_metadata = {
-                "title": "",
-                "artist": "",
-                "album": "",
-                "year": "",
-                "genre": "",
-                "track_number": "",
-                "duration": 0
-            }
-        
-        self.btn_apply.configure(state="normal")
-        self.status_label.configure(text=T("id3_manual_mode"))
+    success = deezer_tagger.apply_id3_tags(filepath, metadata, cover_data)
     
-    def _apply_tags(self):
-        """Applica i tag ID3 al file"""
-        # Raccogli dati dai campi
-        metadata = {
-            "title": self.entry_vars["title"].get().strip(),
-            "artist": self.entry_vars["artist"].get().strip(),
-            "album": self.entry_vars["album"].get().strip(),
-            "year": self.entry_vars["year"].get().strip(),
-            "genre": self.entry_vars["genre"].get().strip(),
-            "track_number": self.entry_vars["track_number"].get().strip()
-        }
-        
-        # Verifica che almeno titolo o artista siano presenti
-        if not metadata["title"] and not metadata["artist"]:
-            messagebox.showwarning(T("id3_warning_title"), 
-                                 T("id3_warning_empty"), parent=self)
-            return
-        
-        # Applica tag
-        success = self.deezer_tagger.apply_id3_tags(
-            self.filepath, metadata, self.cover_data
-        )
-        
-        if success:
-            messagebox.showinfo(T("id3_success_title"), 
-                              T("id3_success_msg"), parent=self)
-            self.destroy()
-        else:
-            messagebox.showerror(T("id3_error_title"), 
-                               T("id3_error_msg"), parent=self)
-
-# ---------------------- CONTROLLO FFMPEG ----------------------
-def show_ffmpeg_missing_error():
-    """Mostra finestra di errore per FFmpeg mancante"""
-    root = ctk.CTk()
-    root.title(T("ffmpeg_missing_title"))
-    root.geometry("600x400")
-    root.resizable(False, False)
-    
-    # Centra la finestra
-    root.update_idletasks()
-    x = (root.winfo_screenwidth() // 2) - (600 // 2)
-    y = (root.winfo_screenheight() // 2) - (400 // 2)
-    root.geometry(f"600x400+{x}+{y}")
-    
-    # Imposta icona
-    try:
-        if os.path.exists("logo.ico"):
-            root.iconbitmap("logo.ico")
-    except Exception:
-        pass
-    
-    # Contenuto
-    frame = ctk.CTkFrame(root)
-    frame.pack(fill="both", expand=True, padx=20, pady=20)
-    
-    # Icona errore
-    ctk.CTkLabel(frame, text="❌", font=("Segoe UI", 48)).pack(pady=(20, 10))
-    
-    # Titolo
-    ctk.CTkLabel(frame, text=T("ffmpeg_missing_title"), font=("Segoe UI", 20, "bold")).pack(pady=(0, 20))
-    
-    # Istruzioni
-    if platform.system().lower() == "windows":
-        instructions = T("ffmpeg_missing_windows")
+    if success:
+        log(f"✅ Tag ID3 applicati automaticamente a: {filepath}")
+        messagebox.showinfo("Metadati Applicati", 
+                          f"Tag ID3 applicati con successo a:\n{filename}",
+                          parent=parent)
     else:
-        instructions = T("ffmpeg_missing_linux")
+        log(f"❌ Fallita applicazione automatica tag ID3 per: {filepath}")
+        messagebox.showwarning("Attenzione", 
+                             f"Impossibile applicare tag ID3 a:\n{filename}",
+                             parent=parent)
     
-    text_widget = ctk.CTkTextbox(frame, wrap="word", height=200, font=("Consolas", 12))
-    text_widget.pack(fill="both", expand=True, padx=10, pady=10)
-    text_widget.insert("1.0", instructions)
-    text_widget.configure(state="disabled")
-    
-    # Pulsante chiudi
-    ctk.CTkButton(frame, text=T("ffmpeg_close_app"), command=sys.exit, 
-                 fg_color="#dc3545", hover_color="#c82333", height=40).pack(pady=20)
-    
-    root.mainloop()
-
-def detect_ffmpeg():
-    """Controlla se FFmpeg è disponibile, altrimenti mostra finestra di errore"""
-    base = os.path.dirname(os.path.abspath(sys.argv[0]))
-    sys_os = platform.system().lower()
-    
-    # Cerca FFmpeg localmente
-    candidate = os.path.join(base, "ffmpeg", "win", "ffmpeg.exe") if "win" in sys_os else os.path.join(base, "ffmpeg", "linux", "ffmpeg")
-
-    if not os.path.exists(candidate):
-        log("⚠️ ffmpeg locale non trovato, controllo presenza globale...")
-        found = shutil.which("ffmpeg")
-        if found:
-            log(f"✅ ffmpeg globale trovato: {found}")
-            return found
-        else:
-            # FFMPEG NON TROVATO - MOSTRA FINESTRA DI ERRORE
-            show_ffmpeg_missing_error()
-            sys.exit(1)
-    
-    os.environ["PATH"] = os.path.dirname(candidate) + os.pathsep + os.environ.get("PATH", "")
-    log(f"FFmpeg path rilevato (locale): {candidate}")
-    return candidate
-
-FFMPEG_PATH = detect_ffmpeg()
+    return success
 
 # ---------------------- ACCORDO LEGALE ----------------------
 def show_agreement():
@@ -799,21 +594,31 @@ def download_with_yt_dlp(url, fmt, out_dir, speed_limit, progress_cb=None):
 
     for attempt in range(max_retries):
         try:
-            postprocessors = [
-                {"key":"FFmpegExtractAudio","preferredcodec": fmt,"preferredquality": "320"}
-            ]
+            # Configurazione postprocessor cross-platform
+            postprocessors = [{"key": "FFmpegExtractAudio", "preferredcodec": fmt}]
             
+            # Aggiungi qualità se specificata (solo per MP3)
+            if fmt == "mp3" and SETTINGS.get("audio_quality"):
+                postprocessors[0]["preferredquality"] = SETTINGS["audio_quality"]
+            
+            # Configurazione yt-dlp cross-platform
             ydl_opts = {
                 "outtmpl": outtmpl,
                 "format": "bestaudio/best",
                 "quiet": True,
                 "noplaylist": True,
-                "ffmpeg_location": os.path.dirname(FFMPEG_PATH),
+                "ffmpeg_location": os.path.dirname(FFMPEG_PATH) if platform.system() == "Windows" else None,
                 "postprocessors": postprocessors,
                 "progress_hooks": [hook],
                 "socket_timeout": 30,
                 "extractor_retries": 3
             }
+            
+            # Su Linux/Unix, se ffmpeg è nel PATH, non specificare ffmpeg_location
+            if platform.system() != "Windows":
+                # Rimuovi ffmpeg_location se non necessario
+                ydl_opts.pop("ffmpeg_location", None)
+            
             if speed_limit != "0":
                 ydl_opts["ratelimit"] = speed_limit
                 
@@ -833,14 +638,14 @@ def download_with_yt_dlp(url, fmt, out_dir, speed_limit, progress_cb=None):
                 log(f"❌ Errore critico durante il download singolo: {e}")
                 raise e
 
-# ---------------------- PLAYLIST DOWNLOADER ----------------------
+# ---------------------- PLAYLIST DOWNLOADER (COMPLETAMENTE RISCRITTO) ----------------------
 class PlaylistDownloader(ctk.CTkToplevel):
     def __init__(self, master, url):
         super().__init__(master)
         self.withdraw()  # Nascondi temporaneamente la finestra
         
         self.title(T("playlist_title"))
-        self.geometry("800x600")
+        self.geometry("850x650")  # Leggermente più grande per la nuova colonna
         self.transient(master)
         
         self._set_icon()
@@ -848,12 +653,15 @@ class PlaylistDownloader(ctk.CTkToplevel):
         self.playlist_url = url
         self.playlist_videos = []
         self.downloading = False
+        self.stop_requested = False
         self.current_video_index = 0
         self.completed_count = 0
+        self.video_progress = {}  # Dizionario per tracciare progresso di ogni video
         
         self.download_dir = ctk.StringVar(value=SETTINGS["download_dir"])
         self.format = ctk.StringVar(value="mp3")  # MP3 come predefinito
         self.status = ctk.StringVar(value=T("playlist_status_fetching"))
+        self.current_video_status = ctk.StringVar(value="")
         self.overall_progress_text = ctk.StringVar(value="")
         self.overall_progress_value = ctk.DoubleVar(value=0)
 
@@ -878,55 +686,95 @@ class PlaylistDownloader(ctk.CTkToplevel):
 
     def _set_icon(self):
         try:
-            if os.path.exists("logo.ico"):
+            current_os = platform.system()
+            if current_os == "Windows" and os.path.exists("logo.ico"):
                 self.after(250, lambda: self.iconbitmap("logo.ico"))
-        except Exception:
-            pass
+            elif current_os == "Linux" and os.path.exists("logo.png"):
+                # Su Linux usa PNG
+                img = PhotoImage(file="logo.png")
+                self.iconphoto(False, img)
+            elif os.path.exists("logo.ico"):
+                # Fallback per Windows
+                self.after(250, lambda: self.iconbitmap("logo.ico"))
+        except Exception as e:
+            log(f"⚠️ Impossibile impostare icona: {e}")
 
     def _build_ui(self):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
-        ctk.CTkLabel(self, text=T("playlist_select_dir"), font=("Segoe UI", 14, "bold")).grid(row=0, column=0, sticky="w", pady=(10, 5), padx=12)
+        # Titolo
+        title_frame = ctk.CTkFrame(self, fg_color="transparent")
+        title_frame.grid(row=0, column=0, sticky="ew", padx=12, pady=(10, 5))
+        ctk.CTkLabel(title_frame, text="📥 Download Playlist", font=("Segoe UI", 16, "bold")).pack(side="left")
+        
+        # Directory
+        ctk.CTkLabel(self, text=T("playlist_select_dir"), font=("Segoe UI", 12)).grid(row=1, column=0, sticky="w", pady=(5, 5), padx=12)
         
         dir_frame = ctk.CTkFrame(self)
-        dir_frame.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 10))
+        dir_frame.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 10))
         dir_frame.grid_columnconfigure(0, weight=1)
         
-        ctk.CTkLabel(dir_frame, textvariable=self.download_dir, wraplength=550).grid(row=0, column=0, sticky="w", padx=10, pady=8)
+        ctk.CTkLabel(dir_frame, textvariable=self.download_dir, wraplength=600).grid(row=0, column=0, sticky="w", padx=10, pady=8)
         ctk.CTkButton(dir_frame, text=T("change_folder"), command=self.change_dir, width=80).grid(row=0, column=1, padx=10, pady=8)
 
+        # Tabella video
         tree_frame = ctk.CTkFrame(self)
-        tree_frame.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 10))
+        tree_frame.grid(row=3, column=0, sticky="nsew", padx=12, pady=(0, 10))
         tree_frame.grid_columnconfigure(0, weight=1)
         tree_frame.grid_rowconfigure(0, weight=1)
 
         self._configure_treeview_style()
         
-        cols = ("#", "Titolo", "Durata", "Uploader")
-        self.tree = Treeview(tree_frame, columns=cols, show="headings", height=15)
+        cols = ("#", "Titolo", "Durata", "Uploader", "Stato", "Progresso")
+        self.tree = Treeview(tree_frame, columns=cols, show="headings", height=12)
         self.tree.column("#", width=40, anchor="center")
-        self.tree.column("Titolo", width=350, anchor="w")
-        self.tree.column("Durata", width=80, anchor="center")
-        self.tree.column("Uploader", width=150, anchor="w")
+        self.tree.column("Titolo", width=280, anchor="w")
+        self.tree.column("Durata", width=60, anchor="center")
+        self.tree.column("Uploader", width=120, anchor="w")
+        self.tree.column("Stato", width=100, anchor="center")
+        self.tree.column("Progresso", width=80, anchor="center")
+        
         for c in cols:
             self.tree.heading(c, text=c)
-        self.tree.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        
+        self.tree.grid(row=0, column=0, sticky="nsew", padx=(5, 0), pady=5)
+        scrollbar.grid(row=0, column=1, sticky="ns", pady=5)
 
+        # Controlli
         controls_frame = ctk.CTkFrame(self)
-        controls_frame.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 10))
+        controls_frame.grid(row=4, column=0, sticky="ew", padx=12, pady=(0, 10))
         
         ctk.CTkLabel(controls_frame, text=T("format_label")).pack(side="left", padx=(10, 5))
         ctk.CTkOptionMenu(controls_frame, variable=self.format, values=["wav", "mp3", "flac"]).pack(side="left", padx=5)
         
         self.btn_download = ctk.CTkButton(controls_frame, text=T("playlist_download_btn"), 
                                          command=self._start_download, state="disabled")
-        self.btn_download.pack(side="right", padx=10)
+        self.btn_download.pack(side="right", padx=(5, 10))
+        
+        self.btn_stop = ctk.CTkButton(controls_frame, text="⏹️ Ferma", 
+                                     command=self._stop_download, state="disabled",
+                                     fg_color="#dc3545", hover_color="#c82333")
+        self.btn_stop.pack(side="right", padx=5)
 
-        ctk.CTkLabel(self, textvariable=self.overall_progress_text, font=("Segoe UI", 12)).grid(row=4, column=0, sticky="w", padx=12)
+        # Progresso corrente
+        progress_frame = ctk.CTkFrame(self)
+        progress_frame.grid(row=5, column=0, sticky="ew", padx=12, pady=(0, 5))
+        
+        ctk.CTkLabel(progress_frame, text="Video corrente:", font=("Segoe UI", 11)).pack(side="left", padx=(10, 5))
+        ctk.CTkLabel(progress_frame, textvariable=self.current_video_status, font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
+        
+        # Progresso generale
+        ctk.CTkLabel(self, textvariable=self.overall_progress_text, font=("Segoe UI", 12)).grid(row=6, column=0, sticky="w", padx=12)
         self.progress_bar = ctk.CTkProgressBar(self, variable=self.overall_progress_value)
-        self.progress_bar.grid(row=5, column=0, sticky="ew", padx=12, pady=(5, 5))
-        ctk.CTkLabel(self, textvariable=self.status).grid(row=6, column=0, sticky="w", padx=12, pady=(0, 10))
+        self.progress_bar.grid(row=7, column=0, sticky="ew", padx=12, pady=(5, 5))
+        
+        # Status
+        ctk.CTkLabel(self, textvariable=self.status, font=("Segoe UI", 11)).grid(row=8, column=0, sticky="w", padx=12, pady=(0, 10))
 
     def change_dir(self):
         d = filedialog.askdirectory(initialdir=self.download_dir.get(), title=T("select_download_folder"))
@@ -941,15 +789,21 @@ class PlaylistDownloader(ctk.CTkToplevel):
             foreground="black",
             fieldbackground="white",
             borderwidth=0,
-            highlightthickness=0
+            highlightthickness=0,
+            font=('Segoe UI', 10)
         )
         style.configure("Treeview.Heading",
             background="#f0f0f0",
             foreground="black",
-            relief="flat"
+            relief="flat",
+            font=('Segoe UI', 10, 'bold')
         )
         style.map("Treeview.Heading",
             background=[('active', '#e0e0e0')]
+        )
+        style.map("Treeview",
+            background=[('selected', '#0078d7')],
+            foreground=[('selected', 'white')]
         )
 
     def _search_playlist_thread(self):
@@ -1004,89 +858,165 @@ class PlaylistDownloader(ctk.CTkToplevel):
             return
 
         self.downloading = True
+        self.stop_requested = False
         self.current_video_index = 0
         self.completed_count = 0
+        self.video_progress = {}
+        
+        # Disabilita pulsante download, abilita stop
         self.btn_download.configure(state="disabled")
+        self.btn_stop.configure(state="normal")
+        
+        # Resetta lo stato di tutti i video
+        for i in range(len(self.playlist_videos)):
+            self.tree.set(str(i), "Stato", "In attesa")
+            self.tree.set(str(i), "Progresso", "0%")
         
         log(f"⬇️ Avvio download playlist. {len(self.playlist_videos)} video da scaricare.")
+        
+        # Avvia il thread di download
         threading.Thread(target=self._download_playlist_thread, daemon=True).start()
 
-    def _download_single_video_worker(self, video_index):
-        video = self.playlist_videos[video_index]
+    def _stop_download(self):
+        if self.downloading:
+            self.stop_requested = True
+            self.status.set("Fermatura in corso...")
+            log("🛑 Fermatura download playlist richiesta dall'utente")
+
+    def _download_single_video_with_subprocess(self, video_index, url, title, output_dir):
+        """Scarica un singolo video usando subprocess per non bloccare la GUI"""
         video_number = video_index + 1
-        url = video["url"]
-        title = video["title"]
-        download_directory = self.download_dir.get()
-
-        log(f"--- Avvio download {video_number}/{len(self.playlist_videos)}: '{title}' ---")
         
-        self.master.queue.put(("playlist_progress_update", (video_index, "start")))
-
-        outtmpl = os.path.join(download_directory, f"{video_number}. %(title)s.%(ext)s")
+        # Crea il template per il nome file
+        safe_title = re.sub(r'[\\/*?:"<>|]', "_", title)
+        output_template = os.path.join(output_dir, f"{video_number}. {safe_title}.%(ext)s")
         
-        postprocessors = [
-            {"key":"FFmpegExtractAudio","preferredcodec": self.format.get(),"preferredquality": "320"}
+        # Costruisci il comando yt-dlp
+        cmd = [
+            "yt-dlp",
+            "-o", output_template,
+            "-f", "bestaudio/best",
+            "--no-playlist",
+            "--socket-timeout", "30",
+            "--extractor-retries", "3",
+            "--newline"  # Importante: output in tempo reale
         ]
-
-        ydl_opts = {
-            "outtmpl": outtmpl,
-            "format": "bestaudio/best",
-            "quiet": True,
-            "noplaylist": True,
-            "ffmpeg_location": os.path.dirname(FFMPEG_PATH),
-            "socket_timeout": 30,
-            "extractor_retries": 3
-        }
-
-        ydl_opts["postprocessors"] = postprocessors
         
+        # Aggiungi postprocessor per l'estrazione audio
+        cmd.extend(["--postprocessor-args", f"-c:a {self.format.get()}"])
+        
+        if self.format.get() == "mp3" and SETTINGS.get("audio_quality"):
+            cmd.extend(["--postprocessor-args", f"-b:a {SETTINGS['audio_quality']}k"])
+        
+        # Aggiungi limitazione velocità se impostata
         speed_limit = SETTINGS["speed_limit"]
         if speed_limit != "0":
-            ydl_opts["ratelimit"] = speed_limit
-
-        max_retries = SETTINGS.get("max_retries", 3)
-        retry_delay = SETTINGS.get("retry_delay", 5)
+            cmd.extend(["--limit-rate", speed_limit])
         
-        for attempt in range(max_retries):
-            try:
-                with YoutubeDL(ydl_opts) as ydl:
-                    ydl.extract_info(url, download=True)
-                log(f"--- ✅ Download {video_number} completato: {title} ---")
-                return True
-
-            except Exception as e:
-                log(f"--- ❌ Tentativo {attempt + 1}/{max_retries} fallito per {title}: {e} ---")
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                else:
+        # Aggiungi l'URL
+        cmd.append(url)
+        
+        log(f"Comando per video {video_number}: {' '.join(cmd)}")
+        
+        try:
+            # Esegui yt-dlp come subprocess per non bloccare la GUI
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                bufsize=1,
+                encoding='utf-8',
+                errors='ignore'
+            )
+            
+            # Leggi l'output in tempo reale
+            while True:
+                if self.stop_requested:
+                    process.terminate()
+                    log(f"❌ Download video {video_number} fermato dall'utente")
                     return False
+                
+                line = process.stdout.readline()
+                if not line and process.poll() is not None:
+                    break
+                
+                if line:
+                    # Analizza l'output per estrarre il progresso
+                    progress = self._parse_yt_dlp_progress(line)
+                    if progress is not None:
+                        # Invia aggiornamento progresso alla GUI
+                        self.master.queue.put(("playlist_video_progress", (video_index, progress)))
+            
+            # Controlla il codice di uscita
+            return_code = process.wait()
+            return return_code == 0
+            
+        except Exception as e:
+            log(f"❌ Errore nel download del video {video_number}: {e}")
+            return False
+
+    def _parse_yt_dlp_progress(self, line):
+        """Analizza l'output di yt-dlp per estrarre il progresso percentuale"""
+        try:
+            # Pattern per estrarre la percentuale (es: "[download]  45.7% of ...")
+            if "[download]" in line:
+                match = re.search(r'(\d+\.?\d*)%', line)
+                if match:
+                    return float(match.group(1))
+            
+            # Pattern per quando il download è completo
+            if "100%" in line or "[ExtractAudio]" in line or "Deleting original file" in line:
+                return 100.0
+                
+        except Exception:
+            pass
+        return None
 
     def _download_playlist_thread(self):
+        """Thread principale per scaricare l'intera playlist"""
         total_videos = len(self.playlist_videos)
         self.completed_count = 0
+        output_dir = self.download_dir.get()
         
-        log(f"Inizio download playlist verso: {self.download_dir.get()}")
-
+        log(f"Inizio download playlist verso: {output_dir}")
+        
         for i in range(total_videos):
-            try:
-                video_success = self._download_single_video_worker(i)
-                
-                if video_success:
-                    self.completed_count += 1
-                    self.master.queue.put(("playlist_progress_update", (i, "done")))
-                else:
-                    self.master.queue.put(("playlist_progress_update", (i, "failed")))
-                    log(f"⚠️ Saltato video {i+1} a causa di errori")
-
-            except Exception as e:
-                log(f"❌ Errore imprevisto nel video {i+1}: {e}")
+            if self.stop_requested:
+                log("⏹️ Download playlist fermato dall'utente")
+                self.master.queue.put(("playlist_stopped", self.completed_count))
+                break
+            
+            video = self.playlist_videos[i]
+            video_number = i + 1
+            
+            # Aggiorna lo stato nella GUI
+            self.master.queue.put(("playlist_progress_update", (i, "start")))
+            self.master.queue.put(("playlist_current_video", (i, f"{video_number}. {video['title']}")))
+            
+            log(f"--- Avvio download {video_number}/{total_videos}: '{video['title']}' ---")
+            
+            # Scarica il video
+            success = self._download_single_video_with_subprocess(i, video["url"], video["title"], output_dir)
+            
+            if success:
+                self.completed_count += 1
+                self.master.queue.put(("playlist_progress_update", (i, "done")))
+                self.master.queue.put(("playlist_video_progress", (i, 100)))
+                log(f"--- ✅ Download {video_number} completato: {video['title']} ---")
+            else:
                 self.master.queue.put(("playlist_progress_update", (i, "failed")))
-
+                log(f"--- ❌ Download {video_number} fallito: {video['title']} ---")
+            
+            # Aggiorna il progresso generale
             self.master.queue.put(("playlist_overall_progress", (i + 1, total_videos, self.completed_count)))
+            
+            # Piccola pausa tra i video
             time.sleep(0.5)
-
-        log(f"✅ Download playlist completato. {self.completed_count}/{total_videos} video scaricati con successo.")
-        self.master.queue.put(("playlist_done", self.completed_count))
+        
+        if not self.stop_requested:
+            log(f"✅ Download playlist completato. {self.completed_count}/{total_videos} video scaricati con successo.")
+            self.master.queue.put(("playlist_done", self.completed_count))
 
     def _loop(self):
         try:
@@ -1099,56 +1029,96 @@ class PlaylistDownloader(ctk.CTkToplevel):
                     
                     if video_count > 0:
                         for i, video in enumerate(self.playlist_videos):
-                            self.tree.insert("", "end", iid=i, values=(i+1, video["title"], video["duration"], video["uploader"]))
+                            self.tree.insert("", "end", iid=str(i), 
+                                           values=(i+1, video["title"], video["duration"], 
+                                                  video["uploader"], "In attesa", "0%"))
                         
-                        self.status.set(f"Trovati {video_count} video. Pronto per il download.")
-                        self.overall_progress_text.set(f"0/{video_count} video scaricati.")
+                        self.status.set(f"✅ Trovati {video_count} video. Pronto per il download.")
+                        self.overall_progress_text.set(f"0/{video_count} video scaricati")
                         self.btn_download.configure(state="normal")
                         self.progress_bar.configure(maximum=video_count)
                         log(f"✅ Trovati {video_count} video nella playlist.")
                     else:
-                        self.status.set("Playlist recuperata ma nessun video trovato o formato non supportato.")
+                        self.status.set("⚠️ Playlist recuperata ma nessun video trovato o formato non supportato.")
                         self.btn_download.configure(state="disabled")
+                
+                elif typ == "playlist_current_video":
+                    video_idx, title = payload
+                    self.current_video_status.set(title[:80] + "..." if len(title) > 80 else title)
                 
                 elif typ == "playlist_progress_update":
                     video_index, status = payload
                     try:
                         iid = str(video_index)
-                        tags_to_remove = ('downloading_tag', 'done_tag', 'failed_tag')
-                        current_tags = list(self.tree.item(iid, 'tags'))
-                        new_tags = [t for t in current_tags if t not in tags_to_remove]
-                        
                         if status == "start":
-                            new_tags.append('downloading_tag')
+                            self.tree.set(iid, "Stato", "📥 Scaricando")
+                            self.tree.set(iid, "Progresso", "0%")
                         elif status == "done":
-                            new_tags.append('done_tag')
+                            self.tree.set(iid, "Stato", "✅ Completato")
+                            self.tree.set(iid, "Progresso", "100%")
                         elif status == "failed":
-                            new_tags.append('failed_tag')
-                            
-                        self.tree.item(iid, tags=new_tags)
+                            self.tree.set(iid, "Stato", "❌ Fallito")
+                            self.tree.set(iid, "Progresso", "ERR")
+                        
+                        # Forza l'aggiornamento visivo
+                        self.tree.update_idletasks()
                     except Exception as e:
-                        log(f"Errore aggiornamento tag treeview: {e}")
-
+                        log(f"Errore aggiornamento stato video: {e}")
+                
+                elif typ == "playlist_video_progress":
+                    video_index, progress = payload
+                    try:
+                        iid = str(video_index)
+                        if 0 <= progress <= 100:
+                            self.tree.set(iid, "Progresso", f"{progress:.1f}%")
+                            # Forza l'aggiornamento visivo
+                            self.tree.update_idletasks()
+                    except Exception as e:
+                        log(f"Errore aggiornamento progresso video: {e}")
+                
                 elif typ == "playlist_overall_progress":
                     current_idx_processed, total, completed_count = payload
                     self.overall_progress_value.set(current_idx_processed)
-                    self.overall_progress_text.set(f"{completed_count}/{total} video scaricati (processato: {current_idx_processed}/{total})")
+                    self.overall_progress_text.set(f"{completed_count}/{total} video scaricati (in elaborazione: {current_idx_processed}/{total})")
                     
-                    if self.downloading and current_idx_processed <= total:
-                         self.status.set(T("playlist_status_downloading").format(
-                             current=current_idx_processed, 
-                             total=total
-                         ))
-
+                    if self.downloading:
+                        progress_percent = (current_idx_processed / total) * 100
+                        self.status.set(f"📊 Progresso generale: {progress_percent:.1f}%")
+                
                 elif typ == "playlist_done":
+                    completed = payload
+                    total = len(self.playlist_videos)
                     log("✅ Download playlist completato.")
-                    self.status.set(T("playlist_status_complete"))
-                    self.overall_progress_text.set(f"{payload}/{len(self.playlist_videos)} video scaricati con successo.")
+                    
+                    self.status.set("✅ Download completato!")
+                    self.current_video_status.set("")
+                    self.overall_progress_text.set(f"{completed}/{total} video scaricati con successo")
                     self.btn_download.configure(state="normal")
+                    self.btn_stop.configure(state="disabled")
                     self.downloading = False
                     
-                    messagebox.showinfo(T("playlist_status_complete"), T("playlist_status_complete"), parent=self)
+                    messagebox.showinfo("Download Completato", 
+                                      f"Download playlist completato!\n\n"
+                                      f"{completed}/{total} video scaricati con successo.",
+                                      parent=self)
                     self.destroy()
+                
+                elif typ == "playlist_stopped":
+                    completed = payload
+                    total = len(self.playlist_videos)
+                    log("⏹️ Download playlist fermato dall'utente.")
+                    
+                    self.status.set("⏹️ Download fermato")
+                    self.current_video_status.set("")
+                    self.overall_progress_text.set(f"{completed}/{total} video scaricati prima dell'arresto")
+                    self.btn_download.configure(state="normal")
+                    self.btn_stop.configure(state="disabled")
+                    self.downloading = False
+                    
+                    messagebox.showinfo("Download Fermato", 
+                                      f"Download playlist fermato.\n\n"
+                                      f"{completed}/{total} video scaricati.",
+                                      parent=self)
                 
                 elif typ == "playlist_error":
                     error_msg = payload
@@ -1157,17 +1127,18 @@ class PlaylistDownloader(ctk.CTkToplevel):
                     
                     # Se è l'errore ['maximum'], mostra un messaggio più soft
                     if "'maximum'" in error_msg and "are not supported arguments" in error_msg:
-                        self.status.set("Playlist trovata ma con formato non completamente supportato.")
+                        self.status.set("⚠️ Playlist trovata ma con formato non completamente supportato.")
                         messagebox.showwarning("Attenzione", 
                             "La playlist è stata trovata ma potrebbe non essere completamente compatibile.\n"
                             "Alcune informazioni potrebbero mancare. Puoi comunque provare a scaricare i video.",
                             parent=self)
                     else:
-                        self.status.set("Errore nel recupero della playlist")
+                        self.status.set("❌ Errore nel recupero della playlist")
                         messagebox.showerror("Errore Playlist", error_msg, parent=self)
                 
                 else:
                     self.master.queue.put_nowait((typ, payload))
+                    
         except queue.Empty:
             pass
         
@@ -1177,7 +1148,7 @@ class PlaylistDownloader(ctk.CTkToplevel):
 class YTDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Il Mangia's MUSIC WAVVER - V.2.9.0") 
+        self.title("Il Mangia's MUSIC WAVVER - V.3.0") 
         self.geometry("960x620")
         
         self._set_icon()
@@ -1197,15 +1168,29 @@ class YTDownloaderApp(ctk.CTk):
         self._build_ui()
         self.after(150, self._loop)
         log("🟢 Ciclo eventi avviato")
-        
-        self.after(500, self.check_for_updates)
 
     def _set_icon(self):
         try:
-            if os.path.exists("logo.ico"):
-                self.after(250, lambda: self.iconbitmap("logo.ico"))
-        except Exception:
-            pass
+            current_os = platform.system()
+            if current_os == "Windows" and os.path.exists("logo.ico"):
+                self.iconbitmap("logo.ico")
+            elif current_os == "Linux" and os.path.exists("logo.png"):
+                # Su Linux usa PNG
+                img = PhotoImage(file="logo.png")
+                self.iconphoto(True, img)
+            elif os.path.exists("logo.ico"):
+                # Fallback per Windows o altri OS con supporto .ico
+                self.iconbitmap("logo.ico")
+        except Exception as e:
+            log(f"⚠️ Impossibile impostare icona: {e}")
+            # Workaround per Windows AppUserModelID
+            if platform.system() == "Windows":
+                try:
+                    import ctypes
+                    myappid = 'ilmangia.musicwavver.2.9.0'
+                    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+                except:
+                    pass
 
     def _set_logo(self):
         self.logo_image = None
@@ -1353,7 +1338,13 @@ class YTDownloaderApp(ctk.CTk):
         win.transient(self)
         
         try:
-            if os.path.exists("logo.ico"):
+            current_os = platform.system()
+            if current_os == "Windows" and os.path.exists("logo.ico"):
+                win.after(250, lambda: win.iconbitmap("logo.ico"))
+            elif current_os == "Linux" and os.path.exists("logo.png"):
+                img = PhotoImage(file="logo.png")
+                win.after(250, lambda: win.iconphoto(True, img))
+            elif os.path.exists("logo.ico"):
                 win.after(250, lambda: win.iconbitmap("logo.ico"))
         except Exception:
             pass
@@ -1433,7 +1424,12 @@ class YTDownloaderApp(ctk.CTk):
             # Dopo il download, verifica se dobbiamo gestire ID3 tag
             global LAST_FILE
             if fmt == "mp3" and SETTINGS.get("write_id3", False) and LAST_FILE and os.path.exists(LAST_FILE):
-                self.queue.put(("id3_prompt", (LAST_FILE, tree_item_id)))
+                # Applica automaticamente ID3 tag (primo risultato Deezer)
+                success = apply_deezer_id3_automatically(self, os.path.basename(LAST_FILE), LAST_FILE, self.deezer_tagger)
+                if success:
+                    self.queue.put(("id3_done", tree_item_id))
+                else:
+                    self.queue.put(("id3_failed", tree_item_id))
             else:
                 self.queue.put(("done", tree_item_id))
                 
@@ -1444,12 +1440,25 @@ class YTDownloaderApp(ctk.CTk):
         global LAST_FILE
         if LAST_FILE and os.path.exists(LAST_FILE):
             try:
-                if platform.system() == "Windows":
+                system = platform.system()
+                if system == "Windows":
                     os.startfile(LAST_FILE)
-                elif platform.system() == "Darwin":
+                elif system == "Darwin":  # macOS
                     subprocess.call(["open", LAST_FILE])
-                else:
-                    subprocess.call(["xdg-open", LAST_FILE])
+                else:  # Linux
+                    # Prova diversi metodi per Linux
+                    try:
+                        subprocess.call(["xdg-open", LAST_FILE])
+                    except:
+                        # Fallback: usa altre applicazioni
+                        try:
+                            subprocess.call(["gio", "open", LAST_FILE])
+                        except:
+                            try:
+                                subprocess.call(["exo-open", LAST_FILE])
+                            except:
+                                # Ultimo tentativo
+                                subprocess.call(["xdg-open", LAST_FILE], shell=True)
             except Exception as e:
                 messagebox.showerror("Errore", f"Impossibile aprire il file: {e}")
         else:
@@ -1470,7 +1479,13 @@ class YTDownloaderApp(ctk.CTk):
         win.geometry("800x600")
         
         try:
-            if os.path.exists("logo.ico"):
+            current_os = platform.system()
+            if current_os == "Windows" and os.path.exists("logo.ico"):
+                win.after(250, lambda: win.iconbitmap("logo.ico"))
+            elif current_os == "Linux" and os.path.exists("logo.png"):
+                img = PhotoImage(file="logo.png")
+                win.after(250, lambda: win.iconphoto(True, img))
+            elif os.path.exists("logo.ico"):
                 win.after(250, lambda: win.iconbitmap("logo.ico"))
         except Exception:
             pass
@@ -1507,11 +1522,17 @@ class YTDownloaderApp(ctk.CTk):
         win = ctk.CTkToplevel(self)
         win.withdraw()  # Nascondi temporaneamente
         win.title(T("settings_title"))
-        win.geometry("540x650")  # Aumentata altezza per nuova opzione
+        win.geometry("540x750")  # Aumentata altezza per nuove opzioni
         win.transient(self)
         
         try:
-            if os.path.exists("logo.ico"):
+            current_os = platform.system()
+            if current_os == "Windows" and os.path.exists("logo.ico"):
+                win.after(250, lambda: win.iconbitmap("logo.ico"))
+            elif current_os == "Linux" and os.path.exists("logo.png"):
+                img = PhotoImage(file="logo.png")
+                win.after(250, lambda: win.iconphoto(True, img))
+            elif os.path.exists("logo.ico"):
                 win.after(250, lambda: win.iconbitmap("logo.ico"))
         except Exception:
             pass
@@ -1527,6 +1548,12 @@ class YTDownloaderApp(ctk.CTk):
         self.dir_label = ctk.CTkLabel(dir_frame, text=SETTINGS["download_dir"], wraplength=480)
         self.dir_label.grid(row=0, column=0, sticky="w", padx=10, pady=8)
         ctk.CTkButton(dir_frame, text=T("change_folder"), command=lambda: self.change_dir(win), width=80).grid(row=0, column=1, padx=10, pady=8)
+
+        ctk.CTkLabel(win, text="Qualità Audio MP3", font=("Segoe UI", 14, "bold")).grid(row=2, column=0, sticky="w", pady=(20, 5), padx=20)
+        self.quality_var = ctk.StringVar(value=SETTINGS.get("audio_quality", "320"))
+        quality_combo = ctk.CTkComboBox(win, variable=self.quality_var, 
+                                      values=["128", "192", "256", "320"], state="readonly")
+        quality_combo.grid(row=3, column=0, sticky="ew", padx=20, pady=5)
 
         ctk.CTkLabel(win, text=T("language_label"), font=("Segoe UI", 14, "bold")).grid(row=4, column=0, sticky="w", pady=(20, 5), padx=20)
         self.lang_var = ctk.StringVar(value=SETTINGS.get("language", "it"))
@@ -1571,7 +1598,8 @@ class YTDownloaderApp(ctk.CTk):
     def save_settings(self, win):
         SETTINGS["language"] = self.lang_var.get()
         SETTINGS["theme"] = self.theme_var.get()
-        SETTINGS["write_id3"] = self.id3_var.get()  # Salva nuova impostazione
+        SETTINGS["write_id3"] = self.id3_var.get()
+        SETTINGS["audio_quality"] = self.quality_var.get()
         SETTINGS["speed_limit"] = self.speed_var.get().strip() or "0"
         
         try:
@@ -1583,102 +1611,6 @@ class YTDownloaderApp(ctk.CTk):
         ctk.set_appearance_mode(SETTINGS["theme"])
         messagebox.showinfo("Impostazioni", "Impostazioni salvate con successo!", parent=win)
         win.destroy()
-
-    def check_for_updates(self):
-        try:
-            last_check_str = SETTINGS.get("last_update_check", "1970-01-01T00:00:00")
-            last_check = datetime.fromisoformat(last_check_str)
-            days_passed = (datetime.now() - last_check).days
-
-            if days_passed >= 3:
-                if messagebox.askyesno(T("updater_prompt_title"), T("updater_prompt_text")):
-                    self.run_updater()
-                else:
-                    SETTINGS["last_update_check"] = datetime.now().isoformat()
-                    save_settings()
-        except Exception:
-            pass
-
-    def run_updater(self):
-        self.updater_win = ctk.CTkToplevel(self)
-        self.updater_win.title(T("updater_title"))
-        self.updater_win.geometry("700x400")
-        self.updater_win.transient(self)
-        self.updater_win.grab_set()
-        
-        try:
-            if os.path.exists("logo.ico"):
-                self.updater_win.after(250, lambda: self.updater_win.iconbitmap("logo.ico"))
-        except Exception:
-            pass
-
-        self.updater_win.grid_columnconfigure(0, weight=1)
-        self.updater_win.grid_rowconfigure(1, weight=1)
-
-        ctk.CTkLabel(self.updater_win, text=T("updater_running"), font=("Segoe UI", 16, "bold")).grid(row=0, column=0, pady=20)
-        
-        text_frame = ctk.CTkFrame(self.updater_win)
-        text_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 20))
-        text_frame.grid_columnconfigure(0, weight=1)
-        text_frame.grid_rowconfigure(0, weight=1)
-        
-        self.updater_log_text = ctk.CTkTextbox(text_frame, wrap="word", font=("Consolas", 12))
-        self.updater_log_text.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        self.updater_log_text.configure(state="disabled")
-
-        threading.Thread(target=self._updater_thread, daemon=True).start()
-        self._check_updater_queue()
-
-    def _updater_thread(self):
-        cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"]
-        try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
-                                       text=True, encoding='utf-8', bufsize=1, universal_newlines=True,
-                                       creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0)
-
-            for line in process.stdout:
-                self.queue.put(("updater_log", line))
-            
-            process.wait()
-
-            if process.returncode == 0:
-                SETTINGS["last_update_check"] = datetime.now().isoformat()
-                save_settings()
-                self.queue.put(("updater_done", True))
-            else:
-                self.queue.put(("updater_done", False))
-                
-        except Exception:
-            self.queue.put(("updater_done", False))
-
-    def _check_updater_queue(self):
-        try:
-            while True:
-                typ, payload = self.queue.get_nowait()
-                
-                if typ == "updater_log":
-                    line = payload
-                    self.updater_log_text.configure(state="normal")
-                    self.updater_log_text.insert("end", line)
-                    self.updater_log_text.see("end")
-                    self.updater_log_text.configure(state="disabled")
-                
-                elif typ == "updater_done":
-                    success = payload
-                    if success:
-                        messagebox.showinfo(T("updater_title"), T("updater_success"), parent=self.updater_win)
-                    else:
-                        messagebox.showerror(T("updater_title"), T("updater_fail"), parent=self.updater_win)
-                    self.updater_win.destroy()
-                    return
-                
-                else:
-                    self.queue.put_nowait((typ, payload))
-
-        except queue.Empty:
-            pass
-        
-        self.updater_win.after(100, self._check_updater_queue)
 
     def _loop(self):
         try:
@@ -1700,35 +1632,50 @@ class YTDownloaderApp(ctk.CTk):
                             pass
                             
                     messagebox.showinfo("Completato", T("complete_msg"))
+                    # Avvia timer per reset UI dopo 5 secondi
                     self.after(5000, self.reset_ui)
                 
-                elif typ == "id3_prompt":
-                    filepath, tree_item_id = payload
-                    filename = os.path.basename(filepath)
-                    
-                    # Prima completa lo stato UI
+                elif typ == "id3_done":
+                    item_id = payload
                     self.downloading = False
                     self.lock_ui(False)
                     self.btn_play.configure(state="normal")
                     self.progress.set(1.0)
                     self.status.set(T("complete"))
                     
-                    if tree_item_id:
+                    if item_id:
                         try:
-                            self.tree.item(tree_item_id, tags=()) 
+                            self.tree.item(item_id, tags=()) 
                         except Exception:
                             pass
                     
-                    # POI mostra la finestra ID3
-                    self.after(100, lambda: DeezerMetadataWindow(self, filename, filepath, self.deezer_tagger))
+                    # Messaggio già mostrato da apply_deezer_id3_automatically
+                    # Avvia timer per reset UI dopo 5 secondi
+                    self.after(5000, self.reset_ui)
+                
+                elif typ == "id3_failed":
+                    item_id = payload
+                    self.downloading = False
+                    self.lock_ui(False)
+                    self.btn_play.configure(state="normal")
+                    self.progress.set(1.0)
+                    self.status.set(T("complete"))
                     
-                    # Non mostrare messaggio "Completato" qui - lo farà la finestra ID3
-                    self.after(3000, self.reset_ui)
+                    if item_id:
+                        try:
+                            self.tree.item(item_id, tags=()) 
+                        except Exception:
+                            pass
+                    
+                    # Messaggio già mostrato da apply_deezer_id3_automatically
+                    # Avvia timer per reset UI dopo 5 secondi
+                    self.after(5000, self.reset_ui)
                 
                 elif typ == "error":
                     self.downloading = False
                     self.lock_ui(False)
                     messagebox.showerror("Errore", payload)
+                    self.after(5000, self.reset_ui)
                 
                 elif typ == "progress":
                     self.progress.set(payload / 100)
@@ -1749,7 +1696,6 @@ class YTDownloaderApp(ctk.CTk):
         self.lock_ui(False)
         LAST_FILE = None
         log("🟢 UI resettata e pronta per un nuovo download.")
-        print("Ui Bloccata con successo. Pronto per un nuovo download.")
 
 # ---------------------- MAIN ----------------------
 def main():
