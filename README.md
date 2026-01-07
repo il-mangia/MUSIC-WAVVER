@@ -2,7 +2,7 @@
   <img src="Logo.png" width="150" alt="Music Wavver Logo"/>
 </p>
 
-<h1 align="center">🎧 MUSIC WAVVER</h1>
+<h1 align="center">MUSIC WAVVER 3.0</h1>
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
