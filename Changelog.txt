@@ -1,4 +1,11 @@
 MUSIC WAVVER - CHANGELOG
+v4.0 (Jan 2026)
+- Finally!!!! Launcher now notifies you when a new update is available.
+- Better UI.. now I added a score to the result, to eliminate the "official videos" and low-quality lyrics.
+- Faster. I cant't believe I could download so fast with a 10MB/s wifi.
+- I am working for a better Debian-Compatibile version. I need a .deb? How yo create a .deb??
+- I'm trying to figure out how to install ffmpeg directly from the launcher. It's going to be hard.
+- yt_dlp now is more secure... :) good!
 
 v3.0 (Dic 2025)
 - Animation Startup
@@ -79,6 +86,7 @@ v1.0 (2024) — First Beta Prototype
 
 ---
 By Il Mangia — 2025
+
 
 
 
