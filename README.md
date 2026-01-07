@@ -3,6 +3,7 @@
 </p>
 
 <h1 align="center">MUSIC WAVVER 3.0</h1>
+<p align="right">Happy 2026! 🎉</p>
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
@@ -32,8 +33,9 @@ Developed with **Python 3**, **yt-dlp**, and **customtkinter**, it combines a mo
 
 ## 🛠️ System Requirements  
 
-- **DENO JS (yt_dlp):** [Official installation guide](https://docs.deno.com/runtime/getting_started/installation/).
-- ffmpeg (How to install below).
+- DENO JS (optional): [Official installation guide](https://docs.deno.com/runtime/getting_started/installation/)
+- ffmpeg (linux): by cmd (`sudo apt install ffmpeg -y`)
+- ffmpeg (windows): by cmd (`winget install Gyan.FFmpeg`)
 
 ---
 
@@ -41,13 +43,13 @@ Developed with **Python 3**, **yt-dlp**, and **customtkinter**, it combines a mo
 
 ### 🪟 Windows  
 1. [Download the latest `.exe` installer](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)  
-2. Extract it into any folder.  
-3. **Important:** You need to install ffmpeg by cmd: (`winget install Gyan.FFmpeg`) and press yes duing installation.
+2. Extract it into any folder
+3. **Important:** You need to install requirements.
 
 ### 🐧 Linux / macOS  
 1. [Download the latest `.zip` release](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)  
-2. Extract it anywhere you want. 
-3. **Important:** You need to install ffmpeg by cmd: (`sudo apt install ffmpeg -y`).
+2. Extract it anywhere you want
+3. **Important:** You need to install requirements
 4. Make the file executable (`chmod +x file`) (where "file" is the one you extracted before).
 
 ---
@@ -80,4 +82,4 @@ By using Music Wavver, you automatically accept the terms of the FFmpeg license.
 
 ---
 
-**Developed in Italy 🇮🇹 — Built and Tested on Linux by Il Mangia — 2025**
+**Developed in Italy 🇮🇹 — Built and Tested on Linux by Il Mangia — 2026**
