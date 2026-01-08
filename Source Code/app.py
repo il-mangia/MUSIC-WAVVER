@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BY IL MANGIA - 04/12/2025
-MUSIC WAVVER 3.0
+BY IL MANGIA - 07/01/2025
+MUSIC WAVVER 4.0
 MADE IN ITALY 🇮🇹
 """
 
@@ -312,8 +312,8 @@ class DeezerID3Tagger:
         log(f"🔍 Query pulita: '{query}'")
         return query
     
-    def search_track(self, query, limit=1):
-        """Cerca una traccia su Deezer - restituisce solo il primo risultato"""
+    def search_track(self, query, limit=5):
+        """Cerca una traccia su Deezer - restituisce più risultati per matching"""
         try:
             # Pulisci la query prima della ricerca
             clean_query = self.clean_search_query(query)
@@ -342,6 +342,160 @@ class DeezerID3Tagger:
         except Exception as e:
             log(f"❌ Errore ricerca Deezer: {e}")
             return []
+    
+    def calculate_matching_score(self, youtube_title, youtube_uploader, deezer_track, youtube_duration=None, search_position=0):
+        """Calcola uno score di matching tra YouTube e Deezer (NUOVA LOGICA)"""
+        score = 0
+        max_score = 100
+        
+        # Prepara i testi per il confronto (lowercase)
+        yt_title_lower = youtube_title.lower()
+        yt_uploader_lower = youtube_uploader.lower()
+        dz_title_lower = deezer_track["title"].lower()
+        dz_artist_lower = deezer_track["artist"].lower()
+        
+        # 1. Uploader = o simile all'Artista (20pt)
+        # Controlla se l'uploader contiene il nome dell'artista o viceversa
+        if dz_artist_lower in yt_uploader_lower or yt_uploader_lower in dz_artist_lower:
+            score += 20
+        else:
+            # Confronto parole per parole con similarità parziale
+            artist_words = set(dz_artist_lower.split())
+            uploader_words = set(yt_uploader_lower.split())
+            common_words = artist_words.intersection(uploader_words)
+            
+            if common_words:
+                similarity = len(common_words) / max(len(artist_words), len(uploader_words))
+                if similarity > 0.5:  # Almeno 50% di similarità
+                    score += int(similarity * 20)
+        
+        # 2. Nome traccia = o simile al nome della canzone (20pt)
+        # Pulisci il titolo YouTube per rimuovere informazioni extra
+        yt_title_clean = re.sub(r'[\[\(].*?[\]\)]', '', yt_title_lower)
+        yt_title_clean = re.sub(r'\b(official|video|audio|lyric|lyrics|hd|hq|4k|1080p|720p|mv|clip|music|song|remix|cover|original|extended|radio edit)\b', '', yt_title_clean, flags=re.IGNORECASE)
+        yt_title_clean = re.sub(r'\s+', ' ', yt_title_clean).strip()
+        
+        dz_title_clean = re.sub(r'[^\w\s]', '', dz_title_lower)
+        
+        # Confronto esatto
+        if yt_title_clean == dz_title_lower or dz_title_lower in yt_title_clean or yt_title_clean in dz_title_lower:
+            score += 20
+        else:
+            # Confronto parole per parole
+            yt_words = set(yt_title_clean.split())
+            dz_words = set(dz_title_clean.split())
+            common_words = yt_words.intersection(dz_words)
+            
+            if common_words:
+                similarity = len(common_words) / max(len(yt_words), len(dz_words))
+                score += int(similarity * 20)
+        
+        # 3. Punteggio per tipo di contenuto (MODIFICATO: più punti ad Audio che a Video)
+        # MODIFICA QUI: assegna punti diversi in base al tipo di contenuto
+        if 'official audio' in yt_title_lower:
+            # Official Audio: massimo punteggio (30pt)
+            score += 30
+            log(f"📀 Official Audio: +30 punti")
+        elif 'official music video' in yt_title_lower:
+            # Video musicale ufficiale
+            score += 25
+            log(f"🎬 Official Music Video: +25 punti")
+        elif 'official video' in yt_title_lower:
+            # Video ufficiale
+            score += 20
+            log(f"🎥 Official Video: +20 punti")
+        elif 'audio' in yt_title_lower:
+            # Solo audio (non ufficiale)
+            score += 18
+            log(f"🔊 Audio: +18 punti")
+        elif 'live' in yt_title_lower and 'performance' in yt_title_lower:
+            # Performance live
+            score += 15
+            log(f"🎤 Live Performance: +15 punti")
+        elif 'lyric' in yt_title_lower or 'lyrics' in yt_title_lower:
+            # Video lyrics
+            score += 5
+            log(f"📝 Lyrics: +5 punti")
+        elif 'cover' in yt_title_lower:
+            # Cover
+            score += 8
+            log(f"🎵 Cover: +8 punti")
+        elif 'remix' in yt_title_lower:
+            # Remix
+            score += 8
+            log(f"🌀 Remix: +8 punti")
+        else:
+            # Altri tipi
+            score += 10
+            log(f"📹 Altro: +10 punti")
+        
+        # 4. Tempo che corrisponde al tempo della traccia (20pt)
+        if youtube_duration and deezer_track.get("duration"):
+            youtube_duration = int(youtube_duration)
+            deezer_duration = int(deezer_track["duration"])
+            diff = abs(youtube_duration - deezer_duration)
+            
+            if diff <= 5:  # Differenza di 5 secondi o meno
+                score += 20
+                log(f"⏱️ Durata perfetta (±5s): +20 punti")
+            elif diff <= 15:  # Differenza di 15 secondi o meno
+                score += 15
+                log(f"⏱️ Durata buona (±15s): +15 punti")
+            elif diff <= 30:  # Differenza di 30 secondi o meno
+                score += 10
+                log(f"⏱️ Durata accettabile (±30s): +10 punti")
+            elif diff <= 60:  # Differenza di 1 minuto o meno
+                score += 5
+                log(f"⏱️ Durata discreta (±60s): +5 punti")
+        
+        # 5. Rilevanza della ricerca (posizione) - 10pt
+        # Primo risultato: 10pt, secondo: 8pt, terzo: 6pt, quarto: 4pt, quinto: 2pt
+        if search_position < 5:
+            position_scores = [10, 8, 6, 4, 2]
+            position_score = position_scores[search_position]
+            score += position_score
+            log(f"🏆 Posizione {search_position+1}: +{position_score} punti")
+        
+        # Log del punteggio totale
+        log(f"📊 Punteggio totale: {min(score, max_score)}/100")
+        
+        # Normalizza a max 100
+        return min(score, max_score)
+    
+    def find_best_match(self, youtube_title, youtube_uploader, youtube_duration=None, search_position=0, limit=5):
+        """Trova il miglior match su Deezer per un video YouTube"""
+        tracks = self.search_track(youtube_title, limit=limit)
+        
+        if not tracks:
+            return None
+        
+        # Calcola score per ogni traccia
+        scored_tracks = []
+        for i, track in enumerate(tracks):
+            score = self.calculate_matching_score(
+                youtube_title, 
+                youtube_uploader,
+                track, 
+                youtube_duration,
+                search_position
+            )
+            scored_tracks.append({
+                **track,
+                "score": score
+            })
+        
+        # Ordina per score decrescente
+        scored_tracks.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Restituisci il migliore se ha score > 40
+        best_match = scored_tracks[0] if scored_tracks else None
+        
+        if best_match and best_match["score"] >= 40:
+            log(f"✅ Miglior match trovato: '{best_match['title']}' - Score: {best_match['score']}/100")
+            return best_match
+        
+        log(f"⚠️ Nessun buon match trovato (miglior score: {best_match['score'] if best_match else 0}/100)")
+        return None
     
     def download_cover(self, url):
         """Scarica la copertina dall'URL"""
@@ -484,8 +638,8 @@ def extract_video_id(url):
         return match.group(2)
     return None
 
-# ---------------------- RICERCA ----------------------
-def _yt_search_worker(query, max_results, result_queue):
+# ---------------------- RICERCA INTEGRATA YOUTUBE + DEEZER ----------------------
+def _yt_search_worker(query, max_results, result_queue, deezer_tagger):
     log(f"🔎 Avvio ricerca - Query: '{query}', Max risultati: {max_results}")
     max_retries = SETTINGS.get("max_retries", 3)
     retry_delay = SETTINGS.get("retry_delay", 5)
@@ -512,23 +666,63 @@ def _yt_search_worker(query, max_results, result_queue):
                 
                 if not is_url:
                     results = []
-                    for e in info.get("entries", []):
+                    entries = info.get("entries", [])
+                    
+                    # Per ogni risultato YouTube, cerca il match migliore su Deezer
+                    for position, e in enumerate(entries):
                         if e.get('id'):
+                            youtube_title = e.get("title", "Sconosciuto")
+                            youtube_uploader = e.get("uploader", "Sconosciuto")
+                            youtube_duration = e.get("duration", None)
+                            
+                            # Cerca il miglior match su Deezer
+                            best_deezer_match = None
+                            if deezer_tagger:
+                                best_deezer_match = deezer_tagger.find_best_match(
+                                    youtube_title, 
+                                    youtube_uploader,
+                                    youtube_duration,
+                                    position,  # Aggiungi la posizione nella ricerca
+                                    limit=3
+                                )
+                            
                             results.append({
-                                "title": e.get("title", "Sconosciuto"),
+                                "title": youtube_title,
                                 "url": f"https://www.youtube.com/watch?v={e['id']}",
-                                "duration": e.get("duration", "N/D"),
-                                "uploader": e.get("uploader", "Sconosciuto")
+                                "duration": youtube_duration,
+                                "uploader": youtube_uploader,
+                                "deezer_match": best_deezer_match,  # Aggiungi il match Deezer
+                                "youtube_original": youtube_title,  # Mantieni il titolo originale
+                                "search_position": position  # Memorizza la posizione nella ricerca
                             })
+                    
                     log(f"✅ Ricerca completata. Trovati {len(results)} risultati.")
                     result_queue.put(("ok", results))
                     return
                 elif info.get("id"):
+                    youtube_title = info.get("title", "Sconosciuto")
+                    youtube_uploader = info.get("uploader", "Sconosciuto")
+                    youtube_duration = info.get("duration", None)
+                    
+                    # Cerca il miglior match su Deezer (posizione 0 per URL singolo)
+                    best_deezer_match = None
+                    if deezer_tagger:
+                        best_deezer_match = deezer_tagger.find_best_match(
+                            youtube_title, 
+                            youtube_uploader,
+                            youtube_duration,
+                            0,  # Posizione 0 per URL singolo
+                            limit=3
+                        )
+                    
                     results = [{
-                        "title": info.get("title", "Sconosciuto"),
+                        "title": youtube_title,
                         "url": info.get("webpage_url", query),
-                        "duration": info.get("duration", "N/D"),
-                        "uploader": info.get("uploader", "Sconosciuto")
+                        "duration": youtube_duration,
+                        "uploader": youtube_uploader,
+                        "deezer_match": best_deezer_match,
+                        "youtube_original": youtube_title,
+                        "search_position": 0
                     }]
                     log("✅ Info URL singolo estratta.")
                     result_queue.put(("ok", results))
@@ -547,7 +741,7 @@ def _yt_search_worker(query, max_results, result_queue):
                 log(f"❌ Errore durante la ricerca/estrazione info: {ex}")
                 result_queue.put(("err", str(ex)))
 
-def search_youtube(query, max_results=10, timeout_seconds=30):
+def search_youtube(query, max_results=10, timeout_seconds=30, deezer_tagger=None):
     rq = queue.Queue()
     video_id = extract_video_id(query)
     
@@ -556,17 +750,17 @@ def search_youtube(query, max_results=10, timeout_seconds=30):
     else:
         query_to_search = query
     
-    t = threading.Thread(target=_yt_search_worker, args=(query_to_search, max_results, rq), daemon=True)
+    # Avvia il thread di ricerca
+    t = threading.Thread(target=_yt_search_worker, args=(query_to_search, max_results, rq, deezer_tagger), daemon=True)
     t.start()
-    start = time.time()
-    while time.time() - start < timeout_seconds:
-        try:
-            typ, payload = rq.get_nowait()
-            return payload if typ == "ok" else (_ for _ in ()).throw(RuntimeError(payload))
-        except queue.Empty:
-            time.sleep(0.05)
-    log(f"❌ Ricerca scaduta dopo {timeout_seconds} secondi.")
-    raise TimeoutError("Ricerca scaduta")
+    
+    # Attendi direttamente senza timer
+    try:
+        typ, payload = rq.get(timeout=timeout_seconds)
+        return payload if typ == "ok" else (_ for _ in ()).throw(RuntimeError(payload))
+    except queue.Empty:
+        log(f"❌ Ricerca scaduta dopo {timeout_seconds} secondi.")
+        raise TimeoutError("Ricerca scaduta")
 
 # ---------------------- DOWNLOAD SINGOLO ----------------------
 LAST_FILE = None
@@ -638,14 +832,12 @@ def download_with_yt_dlp(url, fmt, out_dir, speed_limit, progress_cb=None):
                 log(f"❌ Errore critico durante il download singolo: {e}")
                 raise e
 
-# ---------------------- PLAYLIST DOWNLOADER (COMPLETAMENTE RISCRITTO) ----------------------
+# ---------------------- PLAYLIST DOWNLOADER ----------------------
 class PlaylistDownloader(ctk.CTkToplevel):
     def __init__(self, master, url):
         super().__init__(master)
-        self.withdraw()  # Nascondi temporaneamente la finestra
-        
         self.title(T("playlist_title"))
-        self.geometry("850x650")  # Leggermente più grande per la nuova colonna
+        self.geometry("850x650")
         self.transient(master)
         
         self._set_icon()
@@ -670,32 +862,21 @@ class PlaylistDownloader(ctk.CTkToplevel):
         self._build_ui()
         open(PLAYLIST_LOG_FILE, 'w').close()
         
-        # Mostra la finestra e imposta il grab dopo che è pronta
-        self.after(100, self._show_window)
-        
         threading.Thread(target=self._search_playlist_thread, daemon=True).start()
         self.after(100, self._loop)
-
-    def _show_window(self):
-        """Mostra la finestra e imposta il grab"""
-        self.deiconify()  # Rendi visibile
-        try:
-            self.grab_set()   # Ora puoi impostare il grab
-        except Exception as e:
-            log(f"⚠️ Grab fallito: {e}")
 
     def _set_icon(self):
         try:
             current_os = platform.system()
             if current_os == "Windows" and os.path.exists("logo.ico"):
-                self.after(250, lambda: self.iconbitmap("logo.ico"))
+                self.iconbitmap("logo.ico")
             elif current_os == "Linux" and os.path.exists("logo.png"):
                 # Su Linux usa PNG
                 img = PhotoImage(file="logo.png")
                 self.iconphoto(False, img)
             elif os.path.exists("logo.ico"):
                 # Fallback per Windows
-                self.after(250, lambda: self.iconbitmap("logo.ico"))
+                self.iconbitmap("logo.ico")
         except Exception as e:
             log(f"⚠️ Impossibile impostare icona: {e}")
 
@@ -1148,7 +1329,7 @@ class PlaylistDownloader(ctk.CTkToplevel):
 class YTDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Il Mangia's MUSIC WAVVER - V.3.0") 
+        self.title("Il Mangia's MUSIC WAVVER - V.4.0") 
         self.geometry("960x620")
         
         self._set_icon()
@@ -1163,7 +1344,7 @@ class YTDownloaderApp(ctk.CTk):
         self.search_max = ctk.IntVar(value=10)
         self.deezer_tagger = DeezerID3Tagger()
         
-        log(f"🚀 GUI avviata. Versione: MUSIC WAVVER 2.9.0")
+        log(f"🚀 GUI avviata. Versione: MUSIC WAVVER 4.0")
 
         self._build_ui()
         self.after(150, self._loop)
@@ -1187,7 +1368,7 @@ class YTDownloaderApp(ctk.CTk):
             if platform.system() == "Windows":
                 try:
                     import ctypes
-                    myappid = 'ilmangia.musicwavver.2.9.0'
+                    myappid = 'ilmangia.musicwavver.4.0'
                     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
                 except:
                     pass
@@ -1245,14 +1426,21 @@ class YTDownloaderApp(ctk.CTk):
 
         self._configure_treeview_style()
         
-        cols = ("Titolo", "Uploader", "Durata")
+        # Aggiunta colonna "Score" per visualizzare il matching score
+        cols = ("Titolo", "Uploader", "Durata", "Score", "Status")
         self.tree = Treeview(tree_frame, columns=cols, show="headings", height=14)
         
+        # Configurazione tag per diversi stati
+        self.tree.tag_configure('best_match', background='#d4edda', foreground='#155724')  # Verde chiaro
+        self.tree.tag_configure('good_match', background='#fff3cd', foreground='#856404')  # Giallo chiaro
+        self.tree.tag_configure('no_match', background='#f8f9fa', foreground='#6c757d')  # Grigio chiaro
         self.tree.tag_configure('downloading_tag', background='#3B8ED0', foreground='white')
         
-        self.tree.column("Titolo", width=400, anchor="w")
-        self.tree.column("Uploader", width=150, anchor="w")
+        self.tree.column("Titolo", width=350, anchor="w")
+        self.tree.column("Uploader", width=120, anchor="w")
         self.tree.column("Durata", width=80, anchor="center")
+        self.tree.column("Score", width=60, anchor="center")
+        self.tree.column("Status", width=80, anchor="center")
 
         for c in cols:
             self.tree.heading(c, text=c)
@@ -1332,7 +1520,6 @@ class YTDownloaderApp(ctk.CTk):
             return
 
         win = ctk.CTkToplevel(self)
-        win.withdraw()  # Nascondi temporaneamente
         win.title(T("playlist_prompt_title"))
         win.geometry("400x150")
         win.transient(self)
@@ -1340,12 +1527,12 @@ class YTDownloaderApp(ctk.CTk):
         try:
             current_os = platform.system()
             if current_os == "Windows" and os.path.exists("logo.ico"):
-                win.after(250, lambda: win.iconbitmap("logo.ico"))
+                win.iconbitmap("logo.ico")
             elif current_os == "Linux" and os.path.exists("logo.png"):
                 img = PhotoImage(file="logo.png")
-                win.after(250, lambda: win.iconphoto(True, img))
+                win.iconphoto(True, img)
             elif os.path.exists("logo.ico"):
-                win.after(250, lambda: win.iconbitmap("logo.ico"))
+                win.iconbitmap("logo.ico")
         except Exception:
             pass
 
@@ -1366,16 +1553,28 @@ class YTDownloaderApp(ctk.CTk):
         ctk.CTkButton(button_frame, text=T("playlist_prompt_single"), command=download_single, width=150).pack(side="left", padx=10)
         ctk.CTkButton(button_frame, text=T("playlist_prompt_full"), command=download_full, width=150, 
                      fg_color="#28a745", hover_color="#218838").pack(side="left", padx=10)
-        
-        # Mostra la finestra e imposta il grab dopo che è pronta
-        win.after(100, lambda: (win.deiconify(), win.grab_set()))
 
     def _search_thread(self, q, maxr):
         try:
-            results = search_youtube(q, max_results=maxr, timeout_seconds=SETTINGS["search_timeout"])
+            # Cerca su YouTube e Deezer simultaneamente
+            results = search_youtube(q, max_results=maxr, timeout_seconds=SETTINGS["search_timeout"], deezer_tagger=self.deezer_tagger)
             self.results = results
+            
+            # Trova il miglior match tra tutti i risultati
+            best_match_index = -1
+            best_match_score = -1
+            
+            for i, r in enumerate(results):
+                if r.get("deezer_match"):
+                    score = r["deezer_match"].get("score", 0)
+                    if score > best_match_score:
+                        best_match_score = score
+                        best_match_index = i
+            
+            # Aggiorna l'albero dei risultati
             self.tree.delete(*self.tree.get_children())
-            for r in results:
+            
+            for i, r in enumerate(results):
                 duration_sec = r.get("duration")
                 if isinstance(duration_sec, int):
                     minutes, seconds = divmod(duration_sec, 60)
@@ -1383,9 +1582,55 @@ class YTDownloaderApp(ctk.CTk):
                     duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours > 0 else f"{minutes:02d}:{seconds:02d}"
                 else:
                     duration_str = str(duration_sec)
-                    
-                self.tree.insert("", "end", values=(r["title"], r["uploader"], duration_str))
-            self.status.set(f"{len(results)} risultati trovati.")
+                
+                # Determina il titolo da mostrare
+                if r.get("deezer_match"):
+                    deezer_match = r["deezer_match"]
+                    score = deezer_match.get("score", 0)
+                    # SEMPRE mostra il titolo originale YouTube (sporco)
+                    display_title = r["title"]  # Sempre titolo YouTube originale
+                    score_str = f"{score}/100"
+                    has_good_duration = False
+                    if r.get("duration") and r.get("deezer_match", {}).get("duration"):
+                        youtube_dur = int(r["duration"])
+                        deezer_dur = int(r["deezer_match"]["duration"])
+                        if abs(youtube_dur - deezer_dur) <= 10:  # Differenza massima 10 secondi
+                            has_good_duration = True
+                        if score >= 40:
+                            if has_good_duration:
+                                status = "✅⏱️"  # Buon match + durata corretta
+                            else:
+                                status = "✅"     # Buon match ma durata non perfetta
+                        else:
+                            if has_good_duration:
+                                status = "⚠️⏱️"  # Match mediocre ma durata corretta
+                            else:
+                                status = "⚠️"   # Match mediocre e durata non perfetta
+                    else:
+                        if has_good_duration:
+                            status = "⚠️⏱️"  # Match mediocre ma durata corretta
+                        else:
+                            status = "⚠️"   
+                else:
+                    display_title = r["title"]  # Titolo originale YouTube
+                    score_str = "N/A"
+                    status = "❌"
+                
+                # Determina il tag da applicare
+                if i == best_match_index and best_match_score >= 40:
+                    tag = 'best_match'
+                elif r.get("deezer_match") and r["deezer_match"].get("score", 0) >= 30:
+                    tag = 'good_match'
+                else:
+                    tag = 'no_match'
+                
+                # Inserisci nel treeview
+                item_id = self.tree.insert("", "end", 
+                                          values=(display_title, r["uploader"], duration_str, score_str, status),
+                                          tags=(tag,))
+            
+            self.status.set(f"{len(results)} risultati trovati. Miglior match: {best_match_score}/100" if best_match_score > 0 else f"{len(results)} risultati trovati.")
+            
         except Exception as e:
             self.status.set("Errore ricerca")
             messagebox.showerror("Errore", str(e))
@@ -1412,9 +1657,9 @@ class YTDownloaderApp(ctk.CTk):
         except Exception:
             pass
             
-        threading.Thread(target=self._download_thread, args=(url, self.format.get(), sel), daemon=True).start()
+        threading.Thread(target=self._download_thread, args=(url, self.format.get(), sel, index), daemon=True).start()
 
-    def _download_thread(self, url, fmt, tree_item_id):
+    def _download_thread(self, url, fmt, tree_item_id, result_index):
         try:
             def update_progress(p):
                 self.queue.put(("progress", p))
@@ -1424,12 +1669,38 @@ class YTDownloaderApp(ctk.CTk):
             # Dopo il download, verifica se dobbiamo gestire ID3 tag
             global LAST_FILE
             if fmt == "mp3" and SETTINGS.get("write_id3", False) and LAST_FILE and os.path.exists(LAST_FILE):
-                # Applica automaticamente ID3 tag (primo risultato Deezer)
-                success = apply_deezer_id3_automatically(self, os.path.basename(LAST_FILE), LAST_FILE, self.deezer_tagger)
-                if success:
-                    self.queue.put(("id3_done", tree_item_id))
+                # Controlla se abbiamo un match Deezer per questo risultato
+                result = self.results[result_index]
+                if result.get("deezer_match"):
+                    # Usa i metadati Deezer del match trovato
+                    deezer_match = result["deezer_match"]
+                    
+                    # Scarica copertina
+                    cover_data = self.deezer_tagger.download_cover(deezer_match.get("cover_url", ""))
+                    
+                    # Applica tag ID3
+                    metadata = {
+                        "title": deezer_match.get("title", ""),
+                        "artist": deezer_match.get("artist", ""),
+                        "album": deezer_match.get("album", ""),
+                        "year": deezer_match.get("year", ""),
+                        "genre": deezer_match.get("genre", ""),
+                        "track_number": str(deezer_match.get("track_number", ""))
+                    }
+                    
+                    success = self.deezer_tagger.apply_id3_tags(LAST_FILE, metadata, cover_data)
+                    
+                    if success:
+                        self.queue.put(("id3_done", (tree_item_id, deezer_match.get("score", 0))))
+                    else:
+                        self.queue.put(("id3_failed", tree_item_id))
                 else:
-                    self.queue.put(("id3_failed", tree_item_id))
+                    # Prova ricerca automatica come fallback
+                    success = apply_deezer_id3_automatically(self, os.path.basename(LAST_FILE), LAST_FILE, self.deezer_tagger)
+                    if success:
+                        self.queue.put(("id3_done", (tree_item_id, 0)))
+                    else:
+                        self.queue.put(("id3_failed", tree_item_id))
             else:
                 self.queue.put(("done", tree_item_id))
                 
@@ -1481,12 +1752,12 @@ class YTDownloaderApp(ctk.CTk):
         try:
             current_os = platform.system()
             if current_os == "Windows" and os.path.exists("logo.ico"):
-                win.after(250, lambda: win.iconbitmap("logo.ico"))
+                win.iconbitmap("logo.ico")
             elif current_os == "Linux" and os.path.exists("logo.png"):
                 img = PhotoImage(file="logo.png")
-                win.after(250, lambda: win.iconphoto(True, img))
+                win.iconphoto(True, img)
             elif os.path.exists("logo.ico"):
-                win.after(250, lambda: win.iconbitmap("logo.ico"))
+                win.iconbitmap("logo.ico")
         except Exception:
             pass
         
@@ -1520,73 +1791,147 @@ class YTDownloaderApp(ctk.CTk):
 
     def open_settings(self):
         win = ctk.CTkToplevel(self)
-        win.withdraw()  # Nascondi temporaneamente
         win.title(T("settings_title"))
-        win.geometry("540x750")  # Aumentata altezza per nuove opzioni
+        win.geometry("540x500")  # Ridotta altezza, ora scrollabile
         win.transient(self)
         
         try:
             current_os = platform.system()
             if current_os == "Windows" and os.path.exists("logo.ico"):
-                win.after(250, lambda: win.iconbitmap("logo.ico"))
+                win.iconbitmap("logo.ico")
             elif current_os == "Linux" and os.path.exists("logo.png"):
                 img = PhotoImage(file="logo.png")
-                win.after(250, lambda: win.iconphoto(True, img))
+                win.iconphoto(True, img)
             elif os.path.exists("logo.ico"):
-                win.after(250, lambda: win.iconbitmap("logo.ico"))
+                win.iconbitmap("logo.ico")
         except Exception:
             pass
 
-        win.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(win, text=T("download_folder_label"), font=("Segoe UI", 14, "bold")).grid(row=0, column=0, sticky="w", pady=(20, 5), padx=20)
+        # Frame principale scrollabile
+        main_frame = ctk.CTkFrame(win)
+        main_frame.pack(fill="both", expand=True, padx=0, pady=0)
         
-        dir_frame = ctk.CTkFrame(win)
-        dir_frame.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 10))
+        # Canvas per lo scroll
+        canvas = ctk.CTkCanvas(main_frame)
+        scrollbar = ctk.CTkScrollbar(main_frame, orientation="vertical", command=canvas.yview)
+        scrollable_frame = ctk.CTkFrame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Grid per organizzare il layout
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        main_frame.grid_rowconfigure(0, weight=1)
+        main_frame.grid_columnconfigure(0, weight=1)
+        
+        # Contenuto scrollabile
+        scrollable_frame.grid_columnconfigure(0, weight=1)
+        
+        row_counter = 0
+        
+        # Directory download
+        ctk.CTkLabel(scrollable_frame, text=T("download_folder_label"), font=("Segoe UI", 14, "bold")).grid(
+            row=row_counter, column=0, sticky="w", pady=(20, 5), padx=20
+        )
+        row_counter += 1
+        
+        dir_frame = ctk.CTkFrame(scrollable_frame)
+        dir_frame.grid(row=row_counter, column=0, sticky="ew", padx=20, pady=(0, 10))
         dir_frame.grid_columnconfigure(0, weight=1)
+        row_counter += 1
         
         self.dir_label = ctk.CTkLabel(dir_frame, text=SETTINGS["download_dir"], wraplength=480)
         self.dir_label.grid(row=0, column=0, sticky="w", padx=10, pady=8)
         ctk.CTkButton(dir_frame, text=T("change_folder"), command=lambda: self.change_dir(win), width=80).grid(row=0, column=1, padx=10, pady=8)
-
-        ctk.CTkLabel(win, text="Qualità Audio MP3", font=("Segoe UI", 14, "bold")).grid(row=2, column=0, sticky="w", pady=(20, 5), padx=20)
+        
+        # Qualità audio MP3
+        ctk.CTkLabel(scrollable_frame, text="Qualità Audio MP3", font=("Segoe UI", 14, "bold")).grid(
+            row=row_counter, column=0, sticky="w", pady=(20, 5), padx=20
+        )
+        row_counter += 1
+        
         self.quality_var = ctk.StringVar(value=SETTINGS.get("audio_quality", "320"))
-        quality_combo = ctk.CTkComboBox(win, variable=self.quality_var, 
+        quality_combo = ctk.CTkComboBox(scrollable_frame, variable=self.quality_var, 
                                       values=["128", "192", "256", "320"], state="readonly")
-        quality_combo.grid(row=3, column=0, sticky="ew", padx=20, pady=5)
-
-        ctk.CTkLabel(win, text=T("language_label"), font=("Segoe UI", 14, "bold")).grid(row=4, column=0, sticky="w", pady=(20, 5), padx=20)
+        quality_combo.grid(row=row_counter, column=0, sticky="ew", padx=20, pady=5)
+        row_counter += 1
+        
+        # Lingua
+        ctk.CTkLabel(scrollable_frame, text=T("language_label"), font=("Segoe UI", 14, "bold")).grid(
+            row=row_counter, column=0, sticky="w", pady=(20, 5), padx=20
+        )
+        row_counter += 1
+        
         self.lang_var = ctk.StringVar(value=SETTINGS.get("language", "it"))
-        lang_combo = ctk.CTkComboBox(win, variable=self.lang_var, values=["it", "en", "es", "de"], state="readonly")
-        lang_combo.grid(row=5, column=0, sticky="ew", padx=20, pady=5)
-
-        ctk.CTkLabel(win, text=T("theme_label"), font=("Segoe UI", 14, "bold")).grid(row=6, column=0, sticky="w", pady=(20, 5), padx=20)
+        lang_combo = ctk.CTkComboBox(scrollable_frame, variable=self.lang_var, values=["it", "en", "es", "de"], state="readonly")
+        lang_combo.grid(row=row_counter, column=0, sticky="ew", padx=20, pady=5)
+        row_counter += 1
+        
+        # Tema
+        ctk.CTkLabel(scrollable_frame, text=T("theme_label"), font=("Segoe UI", 14, "bold")).grid(
+            row=row_counter, column=0, sticky="w", pady=(20, 5), padx=20
+        )
+        row_counter += 1
+        
         self.theme_var = ctk.StringVar(value=SETTINGS.get("theme", "system"))
-        theme_combo = ctk.CTkComboBox(win, variable=self.theme_var, values=["system", "dark", "light"], state="readonly")
-        theme_combo.grid(row=7, column=0, sticky="ew", padx=20, pady=5)
-
-        # Nuova opzione ID3 Tag
-        ctk.CTkLabel(win, text="ID3 Tag", font=("Segoe UI", 14, "bold")).grid(row=8, column=0, sticky="w", pady=(20, 5), padx=20)
+        theme_combo = ctk.CTkComboBox(scrollable_frame, variable=self.theme_var, values=["system", "dark", "light"], state="readonly")
+        theme_combo.grid(row=row_counter, column=0, sticky="ew", padx=20, pady=5)
+        row_counter += 1
+        
+        # ID3 Tag
+        ctk.CTkLabel(scrollable_frame, text="ID3 Tag", font=("Segoe UI", 14, "bold")).grid(
+            row=row_counter, column=0, sticky="w", pady=(20, 5), padx=20
+        )
+        row_counter += 1
+        
         self.id3_var = ctk.BooleanVar(value=SETTINGS.get("write_id3", False))
-        id3_check = ctk.CTkCheckBox(win, text=T("id3_enable_label"), variable=self.id3_var, 
+        id3_check = ctk.CTkCheckBox(scrollable_frame, text=T("id3_enable_label"), variable=self.id3_var, 
                                    checkbox_width=20, checkbox_height=20)
-        id3_check.grid(row=9, column=0, sticky="w", padx=20, pady=5)
-
-        ctk.CTkLabel(win, text=T("speed_limit_label"), font=("Segoe UI", 14, "bold")).grid(row=10, column=0, sticky="w", pady=(20, 5), padx=20)
+        id3_check.grid(row=row_counter, column=0, sticky="w", padx=20, pady=5)
+        row_counter += 1
+        
+        # Limitazione velocità
+        ctk.CTkLabel(scrollable_frame, text=T("speed_limit_label"), font=("Segoe UI", 14, "bold")).grid(
+            row=row_counter, column=0, sticky="w", pady=(20, 5), padx=20
+        )
+        row_counter += 1
+        
         self.speed_var = ctk.StringVar(value=SETTINGS.get("speed_limit", "0"))
-        speed_entry = ctk.CTkEntry(win, textvariable=self.speed_var)
-        speed_entry.grid(row=11, column=0, sticky="ew", padx=20, pady=5)
-
-        ctk.CTkLabel(win, text=T("search_timeout_label"), font=("Segoe UI", 14, "bold")).grid(row=12, column=0, sticky="w", pady=(20, 5), padx=20)
+        speed_entry = ctk.CTkEntry(scrollable_frame, textvariable=self.speed_var)
+        speed_entry.grid(row=row_counter, column=0, sticky="ew", padx=20, pady=5)
+        row_counter += 1
+        
+        # Timeout ricerca
+        ctk.CTkLabel(scrollable_frame, text=T("search_timeout_label"), font=("Segoe UI", 14, "bold")).grid(
+            row=row_counter, column=0, sticky="w", pady=(20, 5), padx=20
+        )
+        row_counter += 1
+        
         self.timeout_var = ctk.StringVar(value=str(SETTINGS.get("search_timeout", 30)))
-        timeout_entry = ctk.CTkEntry(win, textvariable=self.timeout_var)
-        timeout_entry.grid(row=13, column=0, sticky="ew", padx=20, pady=5)
-
-        ctk.CTkButton(win, text=T("save_settings"), command=lambda: self.save_settings(win), 
-                     fg_color="#28a745", hover_color="#218838", height=40).grid(row=14, column=0, sticky="ew", padx=20, pady=20)
-
-        # Mostra la finestra e imposta il grab dopo che è pronta
-        win.after(100, lambda: (win.deiconify(), win.grab_set()))
+        timeout_entry = ctk.CTkEntry(scrollable_frame, textvariable=self.timeout_var)
+        timeout_entry.grid(row=row_counter, column=0, sticky="ew", padx=20, pady=5)
+        row_counter += 1
+        
+        # Pulsante salva
+        ctk.CTkButton(scrollable_frame, text=T("save_settings"), command=lambda: self.save_settings(win), 
+                     fg_color="#28a745", hover_color="#218838", height=40).grid(
+            row=row_counter, column=0, sticky="ew", padx=20, pady=20
+        )
+        row_counter += 1
+        
+        # Aggiungi spazio finale
+        ctk.CTkLabel(scrollable_frame, text="").grid(row=row_counter, column=0, pady=10)
+        
+        # Imposta l'altezza del canvas
+        win.update_idletasks()
+        canvas_height = min(500, scrollable_frame.winfo_reqheight())
+        canvas.configure(height=canvas_height)
 
     def change_dir(self, parent_win):
         d = filedialog.askdirectory(initialdir=SETTINGS["download_dir"], title=T("select_download_folder"))
@@ -1636,7 +1981,7 @@ class YTDownloaderApp(ctk.CTk):
                     self.after(5000, self.reset_ui)
                 
                 elif typ == "id3_done":
-                    item_id = payload
+                    item_id, score = payload
                     self.downloading = False
                     self.lock_ui(False)
                     self.btn_play.configure(state="normal")
@@ -1649,7 +1994,10 @@ class YTDownloaderApp(ctk.CTk):
                         except Exception:
                             pass
                     
-                    # Messaggio già mostrato da apply_deezer_id3_automatically
+                    if score > 0:
+                        messagebox.showinfo("Metadati Applicati", 
+                                          f"Tag ID3 applicati con successo!\nScore matching: {score}/100")
+                    
                     # Avvia timer per reset UI dopo 5 secondi
                     self.after(5000, self.reset_ui)
                 
@@ -1667,7 +2015,6 @@ class YTDownloaderApp(ctk.CTk):
                         except Exception:
                             pass
                     
-                    # Messaggio già mostrato da apply_deezer_id3_automatically
                     # Avvia timer per reset UI dopo 5 secondi
                     self.after(5000, self.reset_ui)
                 
