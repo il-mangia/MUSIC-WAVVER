@@ -1,4 +1,13 @@
 MUSIC WAVVER - CHANGELOG
+
+v4.5 (Feb 2026)
+- I hard worked to this. i separated playlist download from app.py.
+- New Setup, more smart and fixes some bugs
+- Stable and fastest
+- Updated yt_dlp to v2026.02.06, due to errors.
+- Updated Libraries
+- Better ui for Playlist Downloader!
+
 v4.0 (Jan 2026)
 - Finally!!!! Launcher now notifies you when a new update is available.
 - Better UI.. now I added a score to the result, to eliminate the "official videos" and low-quality lyrics.
@@ -86,6 +95,7 @@ v1.0 (2024) — First Beta Prototype
 
 ---
 By Il Mangia — 2025
+
 
 
 
