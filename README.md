@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">MUSIC WAVVER 4.5</h1>
-<p align="right">Happy 2026! 🎉</p>
+<p align="right">Happy Carnival! 🎉</p>
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
