@@ -18,7 +18,7 @@ HEIGHT = 520
 LOGO_START_Y = -220
 LOGO_END_Y = 60
 TITLE_CENTER_Y = 290
-CURRENT_VERSION = "4.0"
+CURRENT_VERSION = "4.5"
 
 # URL GitHub
 GITHUB_REPO = "il-mangia/MUSIC-WAVVER"
@@ -30,7 +30,7 @@ GITHUB_LATEST_RELEASE_URL = f"https://github.com/{GITHUB_REPO}/releases/latest"
 # ============================================================================
 TRANSLATIONS = {
     "it": {  # Italiano
-        "app_name": "MUSIC WAVVER",
+        "app_name": "MUSIC WAVVER IT",
         "window_title": f"Music Wavver Launcher v{CURRENT_VERSION}",
         "checking_updates": "Controllo aggiornamenti...",
         "update_available": "Aggiornamento disponibile!",
@@ -78,7 +78,7 @@ TRANSLATIONS = {
     },
     
     "en": {  # English
-        "app_name": "MUSIC WAVVER",
+        "app_name": "MUSIC WAVVER EN",
         "window_title": f"Music Wavver Launcher v{CURRENT_VERSION}",
         "checking_updates": "Checking for updates...",
         "update_available": "Update available!",
@@ -126,7 +126,7 @@ TRANSLATIONS = {
     },
     
     "es": {  # Español
-        "app_name": "MUSIC WAVVER",
+        "app_name": "MUSIC WAVVER ES",
         "window_title": f"Music Wavver Launcher v{CURRENT_VERSION}",
         "checking_updates": "Buscando actualizaciones...",
         "update_available": "¡Actualización disponible!",
@@ -174,7 +174,7 @@ TRANSLATIONS = {
     },
     
     "de": {  # Deutsch
-        "app_name": "MUSIC WAVVER",
+        "app_name": "MUSIC WAVVER DE",
         "window_title": f"Music Wavver Launcher v{CURRENT_VERSION}",
         "checking_updates": "Suche nach Updates...",
         "update_available": "Update verfügbar!",
