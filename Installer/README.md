@@ -34,7 +34,11 @@
     2. Install it again:
         `sudo ./install.sh`
 
-How to use Music Wavver without installation:
-    1) Open terminal in the current folder
-    2) Run chmod +x Music_Wavver
-    3) Run ./Music_Wavver
+---
+
+### Run Music Wavver without installation
+    1. Open a terminal in this folder
+    2. Make the program executable:
+        `chmod +x Music_Wavver`
+    3. Run the program:
+        `./Music_Wavver`
