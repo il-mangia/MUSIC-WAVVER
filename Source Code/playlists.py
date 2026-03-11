@@ -1,1113 +1,799 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PLAYLIST DOWNLOADER PER MUSIC WAVVER 4.5
-- Integrazione perfetta con app.py
-- Tag ID3 automatico (se Deezer disponibile)
-- Ritentativi configurabili
-- Salto file già scaricati
-- Progresso dettagliato (per video e totale)
-- Possibilità di riprovare i video falliti
-- Piena gestione errori e logging
-- CORRETTO: bug nell'ordine di creazione della treeview
+BY IL MANGIA - 2026
+MMUSIC WAVVER 5.0 Playlist Downloader
+MADE IN ITALY
 """
 
-from tkinter import ttk
 import os
 import sys
+import re
+import time
 import json
-import threading
-import queue
 import logging
 import platform
-import time
-import re
-import traceback
-from urllib.parse import urlparse, parse_qs
-from typing import List, Dict, Optional, Tuple, Any, Set
+import threading
+import queue
+import shutil
+import requests
 
+# ── Tkinter / CustomTkinter ────────────────────────────────────────────────────
 import customtkinter as ctk
-from tkinter import messagebox, filedialog, PhotoImage
+from tkinter import filedialog, messagebox, ttk, PhotoImage
 from tkinter.ttk import Treeview, Style
-from yt_dlp import YoutubeDL, DownloadError
 
-# ---------------------- IMPORT DA APP PRINCIPALE (CON FALLBACK) ----------------------
+# ── yt-dlp ─────────────────────────────────────────────────────────────────────
+from yt_dlp import YoutubeDL  # type: ignore
+
+# ── Mutagen (ID3) ───────────────────────────────────────────────────────────────
 try:
-    # Tentativo di importazione dall'app principale
-    from app import log, SETTINGS, save_settings, T, FFMPEG_PATH
-    from app import DeezerID3Tagger
-    DEEZER_AVAILABLE = True
-    log("✅ Playlists: import riuscito da app.py")
-except ImportError as e:
-    # Fallback per esecuzione standalone o test
-    import logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
-    def log(msg): logging.info(msg)
+    from mutagen.mp3 import MP3
+    from mutagen.id3 import ID3, TIT2, TPE1, TALB, TYER, TCON, APIC, error as ID3Error
+    MUTAGEN_AVAILABLE = True
+except ImportError:
+    MUTAGEN_AVAILABLE = False
 
-    SETTINGS = {
-        "download_dir": os.path.expanduser("~/Downloads"),
-        "speed_limit": "0",
-        "audio_quality": "320",
-        "language": "it",
-        "theme": "dark",
-        "write_id3": False,
-        "max_retries": 3,
-        "retry_delay": 2,
-    }
-    DEEZER_AVAILABLE = False
-    FFMPEG_PATH = None
+# ── Pillow ──────────────────────────────────────────────────────────────────────
+try:
+    from PIL import Image, ImageTk
+    PILLOW_AVAILABLE = True
+except ImportError:
+    PILLOW_AVAILABLE = False
 
-    # Traduzioni minime di fallback (identiche a quelle di app.py)
-    TRANSLATIONS = {
-        "it": {
-            "playlist_title": "Playlist Downloader",
-            "playlist_select_dir": "Cartella download",
-            "change_folder": "Cambia",
-            "format_label": "Formato:",
-            "playlist_download_btn": "▶️ Scarica playlist",
-            "playlist_stop_btn": "⏹️ Ferma",
-            "playlist_retry_failed": "🔄 Riprova falliti",
-            "playlist_status_fetching": "Recupero playlist...",
-            "playlist_error_no_videos": "Nessun video trovato.",
-            "select_download_folder": "Seleziona cartella",
-            "playlist_completed": "✅ Completata",
-            "playlist_stopped": "Fermato",
-            "playlist_current_video": "Video corrente:",
-            "playlist_overall_progress": "Progresso:",
-            "playlist_videos_found": "Trovati {} video",
-            "playlist_error": "Errore",
-            "playlist_download_completed": "{}/{} completati ({} falliti)",
-            "playlist_download_stopped": "{}/{} completati (fermato)",
-            "playlist_column_number": "#",
-            "playlist_column_title": "Titolo",
-            "playlist_column_duration": "Durata",
-            "playlist_column_uploader": "Uploader",
-            "playlist_column_status": "Stato",
-            "playlist_column_progress": "Progresso",
-            "playlist_confirm_close": "Download in corso. Chiudere?",
-            "playlist_confirm_title": "Conferma",
-            "playlist_error_invalid_url": "URL non valido",
-            "playlist_error_private": "Video privato",
-            "playlist_error_unavailable": "Video non disponibile",
-            "playlist_retry_confirm": "Riprova i {} video falliti?",
-            "playlist_retry_title": "Riprova falliti",
-            "playlist_skip_existing": "Salta esistenti",
-            "playlist_id3_applied": "ID3 applicato",
-            "playlist_id3_failed": "ID3 fallito",
-        },
-        "en": {
-            "playlist_title": "Playlist Downloader",
-            "playlist_select_dir": "Download folder",
-            "change_folder": "Change",
-            "format_label": "Format:",
-            "playlist_download_btn": "▶️ Download playlist",
-            "playlist_stop_btn": "⏹️ Stop",
-            "playlist_retry_failed": "🔄 Retry failed",
-            "playlist_status_fetching": "Fetching playlist...",
-            "playlist_error_no_videos": "No videos found.",
-            "select_download_folder": "Select folder",
-            "playlist_completed": "✅ Completed",
-            "playlist_stopped": "Stopped",
-            "playlist_current_video": "Current video:",
-            "playlist_overall_progress": "Progress:",
-            "playlist_videos_found": "Found {} videos",
-            "playlist_error": "Error",
-            "playlist_download_completed": "{}/{} completed ({} failed)",
-            "playlist_download_stopped": "{}/{} completed (stopped)",
-            "playlist_column_number": "#",
-            "playlist_column_title": "Title",
-            "playlist_column_duration": "Duration",
-            "playlist_column_uploader": "Uploader",
-            "playlist_column_status": "Status",
-            "playlist_column_progress": "Progress",
-            "playlist_confirm_close": "Download in progress. Close?",
-            "playlist_confirm_title": "Confirm",
-            "playlist_error_invalid_url": "Invalid URL",
-            "playlist_error_private": "Private video",
-            "playlist_error_unavailable": "Unavailable video",
-            "playlist_retry_confirm": "Retry {} failed videos?",
-            "playlist_retry_title": "Retry failed",
-            "playlist_skip_existing": "Skip existing",
-            "playlist_id3_applied": "ID3 applied",
-            "playlist_id3_failed": "ID3 failed",
-        }
-    }
-    def T(key, **kwargs):
-        lang = SETTINGS.get("language", "it")
-        text = TRANSLATIONS.get(lang, TRANSLATIONS["it"]).get(key, key)
-        if kwargs:
-            try:
-                text = text.format(**kwargs)
-            except:
-                pass
-        return text
 
-# ---------------------- COSTANTI ----------------------
-PLAYLIST_LOG_FILE = "playlist_urls.log"
-MAX_RETRIES = SETTINGS.get("max_retries", 3)
-RETRY_DELAY = SETTINGS.get("retry_delay", 2)
-SKIP_EXISTING = True  # può essere reso opzionale in futuro
+# ==============================================================================
+#  COSTANTI / DEFAULTS
+# ==============================================================================
+DEFAULT_DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Music")
+LOG_FILE = "ytdownloader.log"
+SETTINGS_FILE = "settings.json"
 
-# Logger separato per URL delle playlist
-playlist_logger = logging.getLogger("playlist_urls")
-playlist_logger.setLevel(logging.INFO)
-playlist_logger.propagate = False
-if not playlist_logger.handlers:
+_DEFAULT_SETTINGS = {
+    "download_dir": DEFAULT_DOWNLOAD_DIR,
+    "speed_limit": "0",
+    "audio_quality": "320",
+    "playlist_format": "mp3",
+    "playlist_subfolder": True,
+    "write_id3": True,
+    "notify_on_complete": True,
+    "max_retries": 3,
+    "retry_delay": 2,
+    "language": "it",
+}
+
+
+def _load_settings() -> dict:
+    settings = _DEFAULT_SETTINGS.copy()
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for k, v in data.items():
+                if k in settings:
+                    settings[k] = v
+        except Exception:
+            pass
+    return settings
+
+
+def _log(msg: str):
+    print(msg)
     try:
-        fh = logging.FileHandler(PLAYLIST_LOG_FILE, mode='a', encoding='utf-8')
-        fh.setFormatter(logging.Formatter('%(message)s'))
-        playlist_logger.addHandler(fh)
-    except Exception as e:
-        log(f"⚠️ Impossibile creare file log playlist: {e}")
-
-def log_playlist_url(url: str) -> None:
-    """Registra un URL della playlist nel file di log."""
-    try:
-        playlist_logger.info(url)
+        logging.info(msg)
     except Exception:
         pass
 
-# ---------------------- UTILITY ----------------------
-def clean_playlist_url(url: str) -> Optional[str]:
-    """Pulisce l'URL mantenendo solo il parametro 'list'."""
+
+# ==============================================================================
+#  UTILITY
+# ==============================================================================
+
+def _fmt_duration(sec) -> str:
+    if not isinstance(sec, (int, float)):
+        return str(sec) if sec else "?"
+    m, s = divmod(int(sec), 60)
+    h, m = divmod(m, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
+
+
+def _safe_filename(name: str) -> str:
+    """Rimuove caratteri non validi per nomi di cartelle/file."""
+    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name).strip()
+
+
+def _open_folder(path: str):
     try:
-        parsed = urlparse(url)
-        query = parse_qs(parsed.query)
-        playlist_id = query.get("list", [None])[0]
-        if playlist_id:
-            return f"https://www.youtube.com/playlist?list={playlist_id}"
-        if "playlist" in parsed.path:
-            return url
-        return None
+        sys_os = platform.system()
+        if sys_os == "Windows":
+            os.startfile(path)
+        elif sys_os == "Darwin":
+            import subprocess
+            subprocess.call(["open", path])
+        else:
+            import subprocess
+            subprocess.call(["xdg-open", path])
+    except Exception as e:
+        _log(f"WARN: Impossibile aprire cartella: {e}")
+
+
+def _open_file(path: str):
+    try:
+        sys_os = platform.system()
+        if sys_os == "Windows":
+            os.startfile(path)
+        elif sys_os == "Darwin":
+            import subprocess
+            subprocess.call(["open", path])
+        else:
+            import subprocess
+            try:
+                import subprocess
+                subprocess.call(["xdg-open", path])
+            except Exception:
+                pass
     except Exception:
-        return None
+        pass
 
-def is_playlist_url(url: str) -> bool:
-    """Verifica se l'URL è una playlist."""
-    return "list=" in url or "/playlist" in url
 
-def safe_filename(title: str, max_len: int = 100) -> str:
-    """Rimuove caratteri non validi per nomi file."""
-    return re.sub(r'[\\/*?:"<>|]', "_", title)[:max_len]
-
-def format_duration(seconds: Optional[int]) -> str:
-    """Converte secondi in MM:SS o HH:MM:SS."""
-    if not seconds:
-        return "N/D"
+def _notify_desktop(title: str, message: str):
     try:
-        seconds = int(seconds)
-        m, s = divmod(seconds, 60)
-        h, m = divmod(m, 60)
-        if h:
-            return f"{h:02d}:{m:02d}:{s:02d}"
-        return f"{m:02d}:{s:02d}"
-    except:
-        return "N/D"
+        sys_os = platform.system()
+        if sys_os == "Darwin":
+            import subprocess
+            subprocess.run(
+                ["osascript", "-e", f'display notification "{message}" with title "{title}"'],
+                check=False
+            )
+        elif sys_os == "Linux":
+            import subprocess
+            subprocess.run(["notify-send", title, message], check=False)
+        # Windows: usa messagebox come fallback (non blocca)
+    except Exception:
+        pass
 
-# ---------------------- PLAYLIST DOWNLOADER (CLASSE PRINCIPALE) ----------------------
-class PlaylistDownloader(ctk.CTkToplevel):
+
+# ==============================================================================
+#  DEEZER ID3 TAGGER (copia autonoma, non dipende da app.py)
+# ==============================================================================
+
+class _DeezerTagger:
+    API_BASE = "https://api.deezer.com"
+
+    def clean_query(self, q: str) -> str:
+        q = os.path.splitext(q)[0]
+        q = re.sub(r"[\[\(].*?[\]\)]", "", q)
+        terms = [
+            "official", "video", "audio", "lyric", "lyrics", "hq", "hd",
+            "4k", "1080p", "720p", "full", "song", "version", "oficial",
+            "official video", "official audio", "music video", "mv", "clip",
+            "visualizer", "live", "performance", "remix", "mix", "cover",
+            "original", "extended", "radio edit",
+        ]
+        pattern = r"\b(" + "|".join(re.escape(t) for t in terms) + r")\b"
+        q = re.sub(pattern, "", q, flags=re.IGNORECASE)
+        q = re.sub(r"\s+", " ", q).strip()
+        q = re.sub(r"[^\w\s\-]", "", q)
+        return q or os.path.splitext(q)[0]
+
+    def search(self, query: str, limit: int = 3) -> list:
+        try:
+            r = requests.get(f"{self.API_BASE}/search",
+                             params={"q": self.clean_query(query), "limit": limit},
+                             timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            results = []
+            for t in data.get("data", []):
+                results.append({
+                    "title":        t.get("title", ""),
+                    "artist":       t.get("artist", {}).get("name", ""),
+                    "album":        t.get("album", {}).get("title", ""),
+                    "year":         (t.get("release_date") or "").split("-")[0],
+                    "genre":        (t.get("genre") or {}).get("name", ""),
+                    "cover_url":    t.get("album", {}).get("cover_medium", ""),
+                    "track_number": t.get("track_position", ""),
+                    "duration":     t.get("duration", 0),
+                })
+            return results
+        except Exception as e:
+            _log(f"Deezer search error: {e}")
+            return []
+
+    def best_match(self, yt_title: str, yt_uploader: str, yt_dur=None):
+        tracks = self.search(yt_title)
+        if not tracks:
+            return None
+        scored = []
+        for t in tracks:
+            score = 0
+            # Artista vs uploader
+            if t["artist"].lower() in yt_uploader.lower() or yt_uploader.lower() in t["artist"].lower():
+                score += 20
+            # Titolo
+            if t["title"].lower() in yt_title.lower() or yt_title.lower() in t["title"].lower():
+                score += 20
+            # Durata
+            if yt_dur and t.get("duration"):
+                diff = abs(int(yt_dur) - int(t["duration"]))
+                if diff <= 5:
+                    score += 40
+                elif diff <= 15:
+                    score += 15
+                elif diff <= 30:
+                    score += 10
+            scored.append({**t, "score": score})
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        best = scored[0] if scored else None
+        return best if best and best["score"] >= 30 else None
+
+    def download_cover(self, url: str):
+        try:
+            if not url:
+                return None
+            r = requests.get(url, timeout=10)
+            r.raise_for_status()
+            return r.content
+        except Exception:
+            return None
+
+    def apply_tags(self, filepath: str, meta: dict, cover=None) -> bool:
+        if not MUTAGEN_AVAILABLE:
+            return False
+        try:
+            audio = MP3(filepath, ID3=ID3)
+            try:
+                audio.add_tags()
+            except ID3Error:
+                pass
+            if meta.get("title"):
+                audio.tags.add(TIT2(encoding=3, text=meta["title"]))
+            if meta.get("artist"):
+                audio.tags.add(TPE1(encoding=3, text=meta["artist"]))
+            if meta.get("album"):
+                audio.tags.add(TALB(encoding=3, text=meta["album"]))
+            if meta.get("year"):
+                audio.tags.add(TYER(encoding=3, text=meta["year"]))
+            if meta.get("genre"):
+                audio.tags.add(TCON(encoding=3, text=meta["genre"]))
+            if cover:
+                audio.tags.add(APIC(encoding=3, mime="image/jpeg",
+                                    type=3, desc="Cover", data=cover))
+            audio.save()
+            return True
+        except Exception as e:
+            _log(f"ID3 error: {e}")
+            return False
+
+
+# ==============================================================================
+#  FUNZIONE PRINCIPALE PUBBLICA — chiamata da app.py
+# ==============================================================================
+
+def open_playlist_downloader(parent_window, url: str):
     """
-    Finestra modale per il download di playlist YouTube.
+    Punto d'ingresso pubblico.
+    Viene chiamato da app.py con:
+        from playlists import open_playlist_downloader
+        open_playlist_downloader(self, url)
+    """
+    win = PlaylistDownloaderWindow(parent_window, url)
+    # Non chiamare win.mainloop() — è un CTkToplevel, viene gestito dal loop del parent.
+
+
+# ==============================================================================
+#  FINESTRA PLAYLIST
+# ==============================================================================
+
+class PlaylistDownloaderWindow(ctk.CTkToplevel):
+    """
+    Finestra completa per il download di playlist YouTube (e altri siti yt-dlp).
+    Funziona sia come Toplevel di app.py sia standalone.
     """
 
-    def __init__(self, master, url: str):
-        super().__init__(master)
-        self.title(T("playlist_title"))
-        self.geometry("980x750")
-        self.minsize(900, 650)
-        self.transient(master)
+    def __init__(self, parent, url: str):
+        super().__init__(parent)
+
+        self._settings = _load_settings()
+        self._url = url
+        self._entries = []  # list of dicts
+        self._playlist_info: dict = {}
+        self._is_running = False
+        self._is_paused = False
+        self._is_cancelled = False
+        self._done_count = 0
+        self._fail_count = 0
+        self._tagger = _DeezerTagger()
+
+        self.title("Playlist Downloader — Music Wavver")
+        self.geometry("820x640")
+        self.minsize(700, 500)
+        self.resizable(True, True)
+        self.transient(parent)
+
+        self._fmt_var      = ctk.StringVar(value=self._settings.get("playlist_format", "mp3"))
+        self._subfolder_var = ctk.BooleanVar(value=self._settings.get("playlist_subfolder", True))
+        self._outdir_var   = ctk.StringVar(value=self._settings.get("download_dir", DEFAULT_DOWNLOAD_DIR))
+        self._status_var   = ctk.StringVar(value="Recupero informazioni playlist...")
+        self._id3_var      = ctk.BooleanVar(value=self._settings.get("write_id3", True) and MUTAGEN_AVAILABLE)
 
         self._set_icon()
-
-        # Pulisci URL
-        self.original_url = url
-        self.playlist_url = clean_playlist_url(url)
-
-        if not self.playlist_url:
-            messagebox.showerror(
-                T("playlist_error"),
-                T("playlist_error_invalid_url", url=self.original_url),
-                parent=self
-            )
-            self.destroy()
-            return
-
-        # Stato interno
-        self.playlist_videos: List[Dict] = []
-        self.downloading = False
-        self.stop_requested = False
-        self.current_index = 0
-        self.completed = 0
-        self.failed = 0
-        self.failed_indices: List[int] = []          # indici originali dei video falliti
-        self.video_progress: Dict[int, float] = {}
-        self.lock = threading.Lock()
-
-        # Coda per comunicazione thread → GUI
-        self.queue = queue.Queue()
-
-        # Variabili UI
-        self.download_dir = ctk.StringVar(value=SETTINGS.get("download_dir", ""))
-        self.format = ctk.StringVar(value="mp3")
-        self.status_text = ctk.StringVar(value=T("playlist_status_fetching"))
-        self.current_video = ctk.StringVar(value="")
-        self.overall_progress_text = ctk.StringVar(value="0/0")
-        self.overall_progress_var = ctk.DoubleVar(value=0.0)
-
-        # Crea Deezer tagger se disponibile
-        self.deezer_tagger = DeezerID3Tagger() if DEEZER_AVAILABLE else None
-
-        # Costruisce UI
         self._build_ui()
 
-        # Pulisce il file di log all'avvio
-        try:
-            open(PLAYLIST_LOG_FILE, "w").close()
-        except Exception as e:
-            log(f"⚠️ Impossibile pulire file log: {e}")
+        # Avvia fetch in background
+        threading.Thread(target=self._fetch_thread, daemon=True).start()
 
-        # Avvia thread di recupero playlist
-        self.search_thread = threading.Thread(
-            target=self._fetch_playlist_thread,
-            daemon=True,
-            name="PlaylistFetch"
-        )
-        self.search_thread.start()
-
-        # Avvia loop di processazione coda
-        self.after(100, self._process_queue)
-
-        # Gestione chiusura finestra
-        self.protocol("WM_DELETE_WINDOW", self._on_closing)
+    # ──────────────────────────────────────────────────────────────────────────
+    #  ICON
+    # ──────────────────────────────────────────────────────────────────────────
 
     def _set_icon(self):
-        """Imposta l'icona della finestra in base al sistema."""
         try:
-            if platform.system() == "Windows" and os.path.exists("logo.ico"):
+            sys_os = platform.system()
+            if sys_os == "Windows" and os.path.exists("logo.ico"):
                 self.iconbitmap("logo.ico")
-            elif platform.system() == "Linux" and os.path.exists("logo.png"):
-                img = PhotoImage(file="logo.png")
-                self.iconphoto(False, img)
-        except Exception as e:
-            log(f"⚠️ Icona playlist: {e}")
+            elif sys_os == "Linux" and os.path.exists("logo.png"):
+                self.iconphoto(True, PhotoImage(file="logo.png"))
+            elif os.path.exists("logo.png") and PILLOW_AVAILABLE:
+                img = ctk.CTkImage(
+                    light_image=Image.open("logo.png"),
+                    dark_image=Image.open("logo.png"),
+                    size=(32, 32))
+                # non applicabile direttamente a Toplevel come immagine
+        except Exception:
+            pass
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  BUILD UI
+    # ──────────────────────────────────────────────────────────────────────────
 
     def _build_ui(self):
-        """Costruisce l'interfaccia utente."""
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(4, weight=1)
+        self.grid_rowconfigure(1, weight=1)  # lista espandibile
 
-        # --- Intestazione ---
-        title_frame = ctk.CTkFrame(self, fg_color="transparent")
-        title_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(15,5))
-        ctk.CTkLabel(
-            title_frame,
-            text="📋 " + T("playlist_title"),
-            font=("Segoe UI", 18, "bold")
-        ).pack(side="left")
+        # ── Header ────────────────────────────────────────────────────────────
+        hdr = ctk.CTkFrame(self)
+        hdr.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 4))
+        hdr.grid_columnconfigure(1, weight=1)
 
-        # --- Info URL (con wrap) ---
-        info_frame = ctk.CTkFrame(self)
-        info_frame.grid(row=1, column=0, sticky="ew", padx=15, pady=5)
-        info_frame.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(hdr, text="Download Playlist",
+                     font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w", padx=12, pady=8)
 
-        ctk.CTkLabel(info_frame, text=T("playlist_url_label"), font=("Segoe UI", 11, "bold")).grid(
-            row=0, column=0, sticky="w", padx=10, pady=(8,2)
-        )
-        url_display = self.playlist_url if len(self.playlist_url) <= 120 else self.playlist_url[:120] + "..."
-        ctk.CTkLabel(
-            info_frame,
-            text=url_display,
-            font=("Segoe UI", 10),
-            text_color="gray",
-            wraplength=850,
-            justify="left"
-        ).grid(row=1, column=0, sticky="w", padx=10, pady=(0,8))
+        self._status_label = ctk.CTkLabel(hdr, textvariable=self._status_var,
+                                           font=("Segoe UI", 11), text_color="gray",
+                                           wraplength=480, anchor="e")
+        self._status_label.grid(row=0, column=1, sticky="e", padx=12)
 
-        # --- Cartella download ---
-        ctk.CTkLabel(self, text=T("playlist_select_dir"), font=("Segoe UI", 12)).grid(
-            row=2, column=0, sticky="w", padx=15, pady=(10,2)
-        )
-        dir_frame = ctk.CTkFrame(self)
-        dir_frame.grid(row=3, column=0, sticky="ew", padx=15, pady=(0,10))
-        dir_frame.grid_columnconfigure(0, weight=1)
+        # ── Lista brani ────────────────────────────────────────────────────────
+        list_frame = ctk.CTkFrame(self)
+        list_frame.grid(row=1, column=0, sticky="nsew", padx=12, pady=4)
+        list_frame.grid_columnconfigure(0, weight=1)
+        list_frame.grid_rowconfigure(0, weight=1)
 
-        ctk.CTkLabel(dir_frame, textvariable=self.download_dir, wraplength=750).grid(
-            row=0, column=0, sticky="w", padx=12, pady=8
-        )
-        ctk.CTkButton(dir_frame, text=T("change_folder"), command=self._change_dir, width=100).grid(
-            row=0, column=1, padx=12, pady=8
-        )
+        self._configure_tree_style()
+        cols = ("#", "Titolo", "Durata", "Stato")
+        self._tree = Treeview(list_frame, columns=cols, show="headings", height=16)
+        self._tree.column("#",      width=44,  anchor="center", stretch=False)
+        self._tree.column("Titolo", width=450, anchor="w")
+        self._tree.column("Durata", width=75,  anchor="center", stretch=False)
+        self._tree.column("Stato",  width=110, anchor="center", stretch=False)
+        for c in cols:
+            self._tree.heading(c, text=c)
 
-        # --- Tabella video con scroll ---
-        table_frame = ctk.CTkFrame(self)
-        table_frame.grid(row=4, column=0, sticky="nsew", padx=15, pady=(0,10))
-        table_frame.grid_columnconfigure(0, weight=1)
-        table_frame.grid_rowconfigure(0, weight=1)
+        self._tree.tag_configure("pending",     foreground="#777799", background="#1A1A2E")
+        self._tree.tag_configure("downloading", background="#0F3460", foreground="#90CAF9")
+        self._tree.tag_configure("done",        foreground="#81C784", background="#1a3a1a")
+        self._tree.tag_configure("failed",      foreground="#EF9A9A", background="#2a0000")
+        self._tree.tag_configure("skipped",     foreground="#FFCC80")
 
-        # Definizione colonne
-        columns = (
-            T("playlist_column_number"),
-            T("playlist_column_title"),
-            T("playlist_column_duration"),
-            T("playlist_column_uploader"),
-            T("playlist_column_status"),
-            T("playlist_column_progress"),
-        )
+        vsb = ttk.Scrollbar(list_frame, orient="vertical", command=self._tree.yview)
+        self._tree.configure(yscrollcommand=vsb.set)
+        self._tree.grid(row=0, column=0, sticky="nsew", padx=(5, 0), pady=5)
+        vsb.grid(row=0, column=1, sticky="ns", pady=5, padx=(0, 5))
 
-        # Creazione Treeview
-        self.tree = Treeview(
-            table_frame,
-            columns=columns,
-            show="headings",
-            height=15,
-            selectmode="extended"
-        )
+        # ── Opzioni ────────────────────────────────────────────────────────────
+        opts = ctk.CTkFrame(self)
+        opts.grid(row=2, column=0, sticky="ew", padx=12, pady=2)
 
-        # Configura larghezza colonne
-        self.tree.column("#1", width=50, anchor="center", minwidth=40)
-        self.tree.column("#2", width=350, anchor="w", minwidth=200)
-        self.tree.column("#3", width=80, anchor="center", minwidth=60)
-        self.tree.column("#4", width=150, anchor="w", minwidth=100)
-        self.tree.column("#5", width=120, anchor="center", minwidth=100)
-        self.tree.column("#6", width=100, anchor="center", minwidth=80)
+        ctk.CTkLabel(opts, text="Formato:").pack(side="left", padx=(10, 4))
+        ctk.CTkOptionMenu(opts, variable=self._fmt_var,
+                          values=["mp3", "wav", "flac", "m4a", "opus"],
+                          width=90).pack(side="left", padx=(0, 12))
 
-        for col in columns:
-            self.tree.heading(col, text=col)
+        ctk.CTkCheckBox(opts, text="Sottocartella col nome playlist",
+                        variable=self._subfolder_var).pack(side="left", padx=(0, 12))
 
-        # Scrollbar
-        vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
-        hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        if MUTAGEN_AVAILABLE:
+            ctk.CTkCheckBox(opts, text="Scrivi tag ID3 (Deezer)",
+                            variable=self._id3_var).pack(side="left", padx=(0, 12))
 
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-        hsb.grid(row=1, column=0, sticky="ew")
+        # Cartella output
+        dir_row = ctk.CTkFrame(opts, fg_color="transparent")
+        dir_row.pack(side="left", padx=4)
+        ctk.CTkLabel(dir_row, text="[ ]").pack(side="left")
+        self._dir_lbl = ctk.CTkLabel(dir_row, textvariable=self._outdir_var,
+                                      width=160, anchor="w",
+                                      font=("Segoe UI", 11))
+        self._dir_lbl.pack(side="left", padx=4)
+        ctk.CTkButton(dir_row, text="Cambia", width=68,
+                      command=self._choose_dir).pack(side="left")
 
-        # Configura stile e tag DOPO aver creato self.tree
-        self._configure_treeview_style()
+        # ── Barre progresso ────────────────────────────────────────────────────
+        prog_f = ctk.CTkFrame(self)
+        prog_f.grid(row=3, column=0, sticky="ew", padx=12, pady=4)
+        prog_f.grid_columnconfigure(0, weight=1)
 
-        # --- Pannello controlli ---
-        controls_frame = ctk.CTkFrame(self)
-        controls_frame.grid(row=5, column=0, sticky="ew", padx=15, pady=(0,10))
-        controls_frame.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(prog_f, text="File corrente:").grid(
+            row=0, column=0, sticky="w", padx=12, pady=(6, 0))
+        self._prog_single = ctk.CTkProgressBar(prog_f, height=8,
+                                               progress_color="#7C5CBF",
+                                               fg_color="#222233", corner_radius=4)
+        self._prog_single.set(0)
+        self._prog_single.grid(row=1, column=0, sticky="ew", padx=12, pady=(2, 4))
 
-        # Formato e opzioni
-        left_frame = ctk.CTkFrame(controls_frame, fg_color="transparent")
-        left_frame.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        ctk.CTkLabel(prog_f, text="Progresso totale:").grid(
+            row=2, column=0, sticky="w", padx=12)
+        self._prog_total = ctk.CTkProgressBar(prog_f, height=12,
+                                              progress_color="#4CAF50",
+                                              fg_color="#222233", corner_radius=4)
+        self._prog_total.set(0)
+        self._prog_total.grid(row=3, column=0, sticky="ew", padx=12, pady=(2, 4))
 
-        ctk.CTkLabel(left_frame, text=T("format_label"), font=("Segoe UI", 12)).pack(side="left", padx=(0,10))
-        format_menu = ctk.CTkOptionMenu(
-            left_frame,
-            variable=self.format,
-            values=["mp3", "wav", "flac"],
-            width=100
-        )
-        format_menu.pack(side="left", padx=(0,20))
+        self._count_lbl = ctk.CTkLabel(prog_f,
+                                        text="0 / 0  |  OK: 0  Err: 0",
+                                        font=("Segoe UI", 12))
+        self._count_lbl.grid(row=4, column=0, pady=(0, 6))
 
-        self.skip_var = ctk.BooleanVar(value=SKIP_EXISTING)
-        skip_check = ctk.CTkCheckBox(
-            left_frame,
-            text=T("playlist_skip_existing"),
-            variable=self.skip_var,
-            checkbox_width=18,
-            checkbox_height=18
-        )
-        skip_check.pack(side="left", padx=5)
+        # ── Pulsanti ───────────────────────────────────────────────────────────
+        btn_row = ctk.CTkFrame(self, fg_color="transparent")
+        btn_row.grid(row=4, column=0, pady=(4, 14))
 
-        # Pulsanti destra
-        right_frame = ctk.CTkFrame(controls_frame, fg_color="transparent")
-        right_frame.grid(row=0, column=1, sticky="e", padx=10, pady=5)
+        self._btn_start = ctk.CTkButton(
+            btn_row, text="[>] Avvia Download",
+            fg_color="#28a745", hover_color="#218838",
+            width=170, height=40, font=("Segoe UI", 13, "bold"),
+            command=self._start_download, state="disabled")
+        self._btn_start.pack(side="left", padx=8)
 
-        self.btn_retry = ctk.CTkButton(
-            right_frame,
-            text=T("playlist_retry_failed"),
-            command=self._retry_failed,
-            state="disabled",
-            fg_color="#ffc107",
-            hover_color="#e0a800",
-            text_color="black",
-            width=120
-        )
-        self.btn_retry.pack(side="right", padx=5)
+        self._btn_pause = ctk.CTkButton(
+            btn_row, text="|| Pausa",
+            width=130, height=40,
+            command=self._toggle_pause, state="disabled")
+        self._btn_pause.pack(side="left", padx=8)
 
-        self.btn_stop = ctk.CTkButton(
-            right_frame,
-            text=T("playlist_stop_btn"),
-            command=self._stop_download,
-            state="disabled",
-            fg_color="#dc3545",
-            hover_color="#c82333",
-            width=100
-        )
-        self.btn_stop.pack(side="right", padx=5)
+        self._btn_cancel = ctk.CTkButton(
+            btn_row, text="[X] Annulla",
+            fg_color="#dc3545", hover_color="#c82333",
+            width=120, height=40,
+            command=self._cancel_download, state="disabled")
+        self._btn_cancel.pack(side="left", padx=8)
 
-        self.btn_download = ctk.CTkButton(
-            right_frame,
-            text=T("playlist_download_btn"),
-            command=self._start_download,
-            state="disabled",
-            width=140
-        )
-        self.btn_download.pack(side="right", padx=5)
+        self._btn_open = ctk.CTkButton(
+            btn_row, text="Apri Cartella",
+            width=140, height=40,
+            command=self._open_output_dir, state="disabled")
+        self._btn_open.pack(side="left", padx=8)
 
-        # --- Stato corrente ---
-        current_frame = ctk.CTkFrame(self)
-        current_frame.grid(row=6, column=0, sticky="ew", padx=15, pady=(0,5))
-        current_frame.grid_columnconfigure(1, weight=1)
+    @staticmethod
+    def _configure_tree_style():
+        s = Style()
+        s.theme_use("clam")
+        s.configure("Treeview",
+                    background="#1A1A2E", foreground="#CCCCEE",
+                    fieldbackground="#1A1A2E", rowheight=25,
+                    font=("Segoe UI", 11))
+        s.configure("Treeview.Heading",
+                    background="#0F3460", foreground="#AAAACC",
+                    relief="flat", font=("Segoe UI", 10, "bold"))
+        s.map("Treeview.Heading", background=[("active", "#1e4080")])
+        s.map("Treeview",
+              background=[("selected", "#7C5CBF")],
+              foreground=[("selected", "white")])
+        s.configure("Vertical.TScrollbar",
+                    background="#16213E", troughcolor="#1A1A2E", arrowcolor="#888899")
 
-        ctk.CTkLabel(current_frame, text=T("playlist_current_video"), font=("Segoe UI", 11)).grid(
-            row=0, column=0, sticky="w", padx=10, pady=5
-        )
-        ctk.CTkLabel(current_frame, textvariable=self.current_video, font=("Segoe UI", 11, "bold")).grid(
-            row=0, column=1, sticky="w", padx=10, pady=5
-        )
+    # ──────────────────────────────────────────────────────────────────────────
+    #  DIRECTORY
+    # ──────────────────────────────────────────────────────────────────────────
 
-        # --- Barra progresso totale ---
-        progress_frame = ctk.CTkFrame(self)
-        progress_frame.grid(row=7, column=0, sticky="ew", padx=15, pady=(0,5))
-        progress_frame.grid_columnconfigure(0, weight=1)
+    def _choose_dir(self):
+        d = filedialog.askdirectory(initialdir=self._outdir_var.get(),
+                                     title="Seleziona cartella di destinazione")
+        if d:
+            self._outdir_var.set(d)
 
-        self.overall_label = ctk.CTkLabel(
-            progress_frame,
-            textvariable=self.overall_progress_text,
-            font=("Segoe UI", 12)
-        )
-        self.overall_label.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+    def _get_output_dir(self) -> str:
+        base = self._outdir_var.get()
+        if self._subfolder_var.get() and self._playlist_info.get("title"):
+            folder_name = _safe_filename(self._playlist_info["title"])
+            return os.path.join(base, folder_name)
+        return base
 
-        self.progress_bar = ctk.CTkProgressBar(
-            progress_frame,
-            variable=self.overall_progress_var
-        )
-        self.progress_bar.grid(row=1, column=0, sticky="ew", padx=10, pady=(0,5))
+    def _open_output_dir(self):
+        _open_folder(self._get_output_dir())
 
-        # --- Status bottom ---
-        status_frame = ctk.CTkFrame(self)
-        status_frame.grid(row=8, column=0, sticky="ew", padx=15, pady=(0,15))
-        status_frame.grid_columnconfigure(0, weight=1)
+    # ──────────────────────────────────────────────────────────────────────────
+    #  FETCH PLAYLIST INFO
+    # ──────────────────────────────────────────────────────────────────────────
 
-        ctk.CTkLabel(
-            status_frame,
-            textvariable=self.status_text,
-            font=("Segoe UI", 11),
-            wraplength=850,
-            justify="left"
-        ).grid(row=0, column=0, sticky="w", padx=10, pady=10)
-
-    def _configure_treeview_style(self):
-        """Configura lo stile della treeview con colori."""
-        style = Style()
-        style.theme_use("clam")
-
-        style.configure(
-            "Treeview",
-            background="white",
-            foreground="black",
-            fieldbackground="white",
-            borderwidth=1,
-            relief="solid",
-            font=("Segoe UI", 10),
-            rowheight=25
-        )
-        style.configure(
-            "Treeview.Heading",
-            background="#f0f0f0",
-            foreground="black",
-            relief="flat",
-            font=("Segoe UI", 10, "bold"),
-            padding=(5,5)
-        )
-        style.map("Treeview.Heading", background=[("active", "#e0e0e0")])
-        style.map(
-            "Treeview",
-            background=[("selected", "#0078d7")],
-            foreground=[("selected", "white")]
-        )
-
-        # Tag per stati (self.tree esiste già)
-        self.tree.tag_configure("downloading", background="#cce5ff", foreground="#004085")
-        self.tree.tag_configure("completed", background="#d4edda", foreground="#155724")
-        self.tree.tag_configure("failed", background="#f8d7da", foreground="#721c24")
-        self.tree.tag_configure("skipped", background="#fff3cd", foreground="#856404")
-        self.tree.tag_configure("id3_applied", background="#d1ecf1", foreground="#0c5460")
-
-    def _change_dir(self):
-        """Cambia la directory di download."""
-        directory = filedialog.askdirectory(
-            initialdir=self.download_dir.get(),
-            title=T("select_download_folder")
-        )
-        if directory:
-            self.download_dir.set(directory)
-            log(f"📁 Cartella playlist cambiata in: {directory}")
-
-    def _fetch_playlist_thread(self):
-        """Thread per recuperare i video della playlist."""
+    def _fetch_thread(self):
         try:
-            log(f"🔍 Recupero playlist: {self.playlist_url}")
-            ydl_opts = {
-                "quiet": True,
-                "no_warnings": True,
-                "extract_flat": True,
-                "skip_download": True,
-                "ignoreerrors": True,
+            opts = {
+                "quiet":          True,
+                "extract_flat":   "in_playlist",   # FIX: not just True
+                "skip_download":  True,
                 "socket_timeout": 30,
+                "ignoreerrors":   True,
+                "noplaylist":     False,            # FIX: must be False for playlists
             }
-            with YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(self.playlist_url, download=False)
+            with YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(self._url, download=False)
 
             if not info:
-                self.queue.put(("error", "Impossibile ottenere informazioni playlist"))
-                return
+                raise ValueError("Nessuna informazione ottenuta dall'URL.")
 
-            entries = info.get("entries", [])
-            if not entries:
-                self.queue.put(("error", T("playlist_error_no_videos")))
-                return
+            self._playlist_info = info
+            raw_entries = info.get("entries") or []
+            entries = []
+            for e in raw_entries:
+                if not e:
+                    continue
+                if not e.get("id"):
+                    url_field = e.get("url", "")
+                    if "watch?v=" in url_field:
+                        e["id"] = url_field.split("watch?v=")[-1].split("&")[0]
+                    elif url_field and len(url_field) == 11:
+                        e["id"] = url_field
+                if e.get("id"):
+                    entries.append(e)
+            self._entries = entries
 
-            videos = []
-            for idx, entry in enumerate(entries):
-                if entry and entry.get("id"):
-                    video = {
-                        "id": entry["id"],
-                        "title": entry.get("title", f"Video {idx+1}")[:100],
-                        "duration": entry.get("duration"),
-                        "uploader": entry.get("uploader", entry.get("channel", "Sconosciuto"))[:50],
-                        "url": f"https://www.youtube.com/watch?v={entry['id']}",
-                    }
-                    videos.append(video)
-                    log_playlist_url(video["url"])
+            # Popola albero nel thread UI
+            self.after(0, self._populate_tree, entries, info)
 
-            if videos:
-                self.queue.put(("videos_loaded", videos))
-            else:
-                self.queue.put(("error", T("playlist_error_no_videos")))
+        except Exception as exc:
+            _log(f"Fetch playlist error: {exc}")
+            self.after(0, self._on_fetch_error, str(exc))
 
-        except Exception as e:
-            log(f"❌ Errore recupero playlist: {e}\n{traceback.format_exc()}")
-            self.queue.put(("error", str(e)))
+    def _populate_tree(self, entries: list, info: dict):
+        self._tree.delete(*self._tree.get_children())
+        for i, e in enumerate(entries, 1):
+            dur = _fmt_duration(e.get("duration")) if e.get("duration") else "?"
+            self._tree.insert("", "end", iid=str(i - 1),
+                              values=(i, e.get("title", "Sconosciuto"), dur, "Attesa"),
+                              tags=("pending",))
+
+        title = info.get("title", "Playlist")
+        total = len(entries)
+        self._status_var.set(f"{title}  —  {total} brani")
+        self._btn_start.configure(state="normal")
+        _log(f"Playlist caricata: '{title}' — {total} brani")
+
+    def _on_fetch_error(self, msg: str):
+        self._status_var.set(f"Errore caricamento: {msg}")
+        messagebox.showerror("Errore Playlist",
+                             f"Impossibile caricare la playlist:\n\n{msg}", parent=self)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  DOWNLOAD
+    # ──────────────────────────────────────────────────────────────────────────
 
     def _start_download(self):
-        """Avvia il download della playlist."""
-        if self.downloading:
+        if not self._entries:
             return
-        if not self.playlist_videos:
-            messagebox.showerror(T("playlist_error"), T("playlist_error_no_videos_found"), parent=self)
-            return
+        self._is_running   = True
+        self._is_paused    = False
+        self._is_cancelled = False
+        self._done_count   = 0
+        self._fail_count   = 0
 
-        # Verifica directory
-        if not os.path.exists(self.download_dir.get()):
-            try:
-                os.makedirs(self.download_dir.get(), exist_ok=True)
-            except Exception as e:
-                messagebox.showerror(T("playlist_error"), f"Impossibile creare directory:\n{e}", parent=self)
-                return
+        out_dir = self._get_output_dir()
+        os.makedirs(out_dir, exist_ok=True)
 
-        self.downloading = True
-        self.stop_requested = False
-        self.completed = 0
-        self.failed = 0
-        self.failed_indices.clear()
-        self.current_index = 0
-        self.video_progress.clear()
+        self._btn_start.configure(state="disabled")
+        self._btn_pause.configure(state="normal")
+        self._btn_cancel.configure(state="normal")
+        self._btn_open.configure(state="disabled")
 
-        # Reset UI
-        self.btn_download.configure(state="disabled")
-        self.btn_stop.configure(state="normal")
-        self.btn_retry.configure(state="disabled")
-        self.progress_bar.configure(mode="determinate")
-        self.overall_progress_var.set(0)
+        threading.Thread(
+            target=self._download_worker,
+            args=(out_dir, self._fmt_var.get()),
+            daemon=True
+        ).start()
 
-        # Reset righe
-        for i in range(len(self.playlist_videos)):
-            self.tree.set(str(i), T("playlist_column_status"), "⏳ In attesa")
-            self.tree.set(str(i), T("playlist_column_progress"), "0%")
-            self.tree.item(str(i), tags=())
+    def _download_worker(self, out_dir: str, fmt: str):
+        total = len(self._entries)
+        settings = _load_settings()
+        speed_limit = settings.get("speed_limit", "0")
+        write_id3   = self._id3_var.get() if MUTAGEN_AVAILABLE else False
 
-        total = len(self.playlist_videos)
-        self.overall_progress_text.set(f"0/{total} - 0%")
-        self.status_text.set(T("playlist_status_downloading", current=1, total=total))
+        for idx, entry in enumerate(self._entries):
 
-        log(f"▶️ Avvio download playlist: {total} video")
-
-        # Thread principale di download
-        self.download_thread = threading.Thread(
-            target=self._download_playlist_thread,
-            daemon=True,
-            name="PlaylistDownload"
-        )
-        self.download_thread.start()
-
-    def _stop_download(self):
-        """Richiede l'arresto del download."""
-        if self.downloading and not self.stop_requested:
-            self.stop_requested = True
-            self.status_text.set("⏹️ Arresto in corso...")
-            log("⏹️ Richiesto arresto download playlist")
-
-    def _retry_failed(self):
-        """Riprova i video falliti."""
-        if not self.failed_indices:
-            return
-        if self.downloading:
-            return
-
-        # Conferma
-        if not messagebox.askyesno(
-            T("playlist_retry_title"),
-            T("playlist_retry_confirm", count=len(self.failed_indices)),
-            parent=self
-        ):
-            return
-
-        # Filtra la lista dei video mantenendo solo quelli falliti (basati sugli indici originali)
-        # Nota: self.playlist_videos contiene ancora tutti i video originali
-        failed_videos = [self.playlist_videos[i] for i in self.failed_indices]
-        self.playlist_videos = failed_videos
-
-        # Ricrea la tabella con i soli video falliti
-        self._refresh_table_from_failed()
-
-        # Pulisci la lista degli indici falliti (ora sono tutti da processare)
-        self.failed_indices.clear()
-
-        # Riavvia il download
-        self._start_download()
-
-    def _refresh_table_from_failed(self):
-        """Aggiorna la tabella mostrando solo i video falliti."""
-        self.tree.delete(*self.tree.get_children())
-        for new_idx, video in enumerate(self.playlist_videos):
-            self.tree.insert(
-                "",
-                "end",
-                iid=str(new_idx),
-                values=(
-                    new_idx + 1,
-                    video["title"],
-                    format_duration(video.get("duration")),
-                    video["uploader"],
-                    "In attesa",
-                    "0%"
-                )
-            )
-        self.overall_progress_text.set(f"0/{len(self.playlist_videos)} - 0%")
-
-    def _download_playlist_thread(self):
-        """Thread principale che esegue i download uno dopo l'altro."""
-        total = len(self.playlist_videos)
-        for idx, video in enumerate(self.playlist_videos):
-            if self.stop_requested:
+            if self._is_cancelled:
                 break
 
-            self.current_index = idx
-            self.queue.put(("video_start", (idx, video["title"])))
+            # ── Attesa pausa ─────────────────────────────────────────────
+            while self._is_paused and not self._is_cancelled:
+                time.sleep(0.3)
+            if self._is_cancelled:
+                break
 
-            # Controllo esistenza file (se skip attivo)
-            if self.skip_var.get():
-                expected_filename = self._get_expected_filename(video, idx)
-                if expected_filename and os.path.exists(expected_filename):
-                    log(f"⏭️ File già esistente, salto: {expected_filename}")
-                    with self.lock:
-                        self.completed += 1
-                    self.queue.put(("video_skipped", idx))
-                    self.queue.put(("overall_progress", (self.completed, self.failed, total)))
-                    continue
+            title     = entry.get("title", f"Traccia {idx + 1}")
+            video_url = f"https://www.youtube.com/watch?v={entry['id']}"
 
-            # Download con retry
+            # Aggiorna UI: stato "scaricando"
+            self.after(0, self._set_row, str(idx), "downloading", "Scaricando...")
+            self.after(0, self._status_var.set,
+                       f"[{idx + 1}/{total}]  {title[:65]}")
+            self.after(0, self._prog_single.set, 0)
+
             success = False
-            for attempt in range(1, MAX_RETRIES + 1):
-                if self.stop_requested:
-                    break
-                try:
-                    log(f"📥 Download [{idx+1}/{total}] tentativo {attempt}: {video['title']}")
-                    self._download_single_video(video, idx, attempt)
-                    success = True
-                    break
-                except Exception as e:
-                    log(f"❌ Tentativo {attempt} fallito: {e}")
-                    if attempt < MAX_RETRIES:
-                        time.sleep(RETRY_DELAY)
-                    else:
-                        log(f"❌ Video fallito dopo {MAX_RETRIES} tentativi: {video['title']}")
-
-            if success:
-                with self.lock:
-                    self.completed += 1
-                self.queue.put(("video_done", idx))
-                # Applica ID3 se necessario (in un thread separato per non bloccare)
-                if self.format.get() == "mp3" and SETTINGS.get("write_id3") and self.deezer_tagger:
-                    self._apply_id3_in_background(video, idx)
-            else:
-                with self.lock:
-                    self.failed += 1
-                    self.failed_indices.append(idx)  # idx è l'indice corrente nella lista ristretta
-                self.queue.put(("video_failed", idx))
-
-            # Aggiorna progresso generale
-            self.queue.put(("overall_progress", (self.completed, self.failed, total)))
-
-            # Piccola pausa tra i video
-            time.sleep(0.5)
-
-        # Completato o fermato
-        if self.stop_requested:
-            self.queue.put(("download_stopped", (self.completed, self.failed)))
-        else:
-            self.queue.put(("download_completed", (self.completed, self.failed)))
-
-    def _get_expected_filename(self, video: Dict, idx: int) -> Optional[str]:
-        """Restituisce il percorso completo atteso per il video."""
-        try:
-            base = safe_filename(f"{idx+1:03d}. {video['title']}")
-            ext = self.format.get()
-            return os.path.join(self.download_dir.get(), f"{base}.{ext}")
-        except:
-            return None
-
-    def _download_single_video(self, video: Dict, idx: int, attempt: int):
-        """Esegue il download effettivo di un singolo video."""
-        output_template = os.path.join(
-            self.download_dir.get(),
-            f"%(title)s.%(ext)s"
-        )
-
-        # Prepara opzioni yt-dlp
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": output_template,
-            "quiet": True,
-            "no_warnings": True,
-            "progress_hooks": [self._create_progress_hook(idx)],
-            "ignoreerrors": True,
-            "socket_timeout": 30,
-            "extractor_retries": 3,
-            "noplaylist": True,
-        }
-
-        # Post-processor per audio
-        if self.format.get() == "mp3":
-            ydl_opts["postprocessors"] = [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": SETTINGS.get("audio_quality", "320"),
-            }]
-        elif self.format.get() == "wav":
-            ydl_opts["postprocessors"] = [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "wav",
-            }]
-        elif self.format.get() == "flac":
-            ydl_opts["postprocessors"] = [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "flac",
-            }]
-
-        # Limite velocità
-        speed = SETTINGS.get("speed_limit", "0")
-        if speed != "0":
-            ydl_opts["ratelimit"] = int(speed) * 1024
-
-        # FFmpeg path (solo Windows)
-        if platform.system() == "Windows" and FFMPEG_PATH:
-            ydl_opts["ffmpeg_location"] = os.path.dirname(FFMPEG_PATH)
-
-        with YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video["url"]])
-
-    def _create_progress_hook(self, idx: int):
-        """Crea un hook per il progresso del download."""
-        def hook(d):
-            if self.stop_requested:
-                raise Exception("Download fermato dall'utente")
-            if d.get("status") == "downloading":
-                percent = 0.0
-                if d.get("total_bytes"):
-                    percent = d["downloaded_bytes"] / d["total_bytes"] * 100
-                elif d.get("total_bytes_estimate"):
-                    percent = d["downloaded_bytes"] / d["total_bytes_estimate"] * 100
-                elif d.get("_percent_str"):
-                    try:
-                        percent = float(d["_percent_str"].strip().replace("%", ""))
-                    except:
-                        pass
-                self.queue.put(("video_progress", (idx, percent)))
-            elif d.get("status") == "finished":
-                self.queue.put(("video_progress", (idx, 100.0)))
-        return hook
-
-    def _apply_id3_in_background(self, video: Dict, idx: int):
-        """Applica i tag ID3 in un thread separato per non bloccare."""
-        def apply():
-            # Piccola attesa per sicurezza (assicura che il file sia stato scritto)
-            time.sleep(1)
             try:
-                # Costruisce il percorso del file dopo conversione
-                base = safe_filename(video["title"])
-                filepath = os.path.join(self.download_dir.get(), f"{base}.mp3")
-                if not os.path.exists(filepath):
-                    # Prova con prefisso numerico
-                    base2 = safe_filename(f"{idx+1:03d}. {video['title']}")
-                    filepath = os.path.join(self.download_dir.get(), f"{base2}.mp3")
+                downloaded_file = []  # mutabile per uso nel hook
 
-                if os.path.exists(filepath):
-                    # Cerca match Deezer
-                    match = self.deezer_tagger.find_best_match(
-                        video["title"],
-                        video["uploader"],
-                        video.get("duration")
-                    )
-                    if match:
-                        cover = self.deezer_tagger.download_cover(match.get("cover_url", ""))
-                        metadata = {
-                            "title": match.get("title", ""),
-                            "artist": match.get("artist", ""),
-                            "album": match.get("album", ""),
-                            "year": match.get("year", ""),
-                            "genre": match.get("genre", ""),
-                        }
-                        if self.deezer_tagger.apply_id3_tags(filepath, metadata, cover):
-                            self.queue.put(("id3_applied", idx))
-                            return
-                self.queue.put(("id3_failed", idx))
-            except Exception as e:
-                log(f"⚠️ ID3 error: {e}")
-                self.queue.put(("id3_failed", idx))
+                def hook(d, _file=downloaded_file):
+                    if d["status"] == "downloading":
+                        total_b = d.get("total_bytes_estimate") or d.get("total_bytes")
+                        if total_b and total_b > 0:
+                            pct = d.get("downloaded_bytes", 0) / total_b
+                            self.after(0, self._prog_single.set, pct)
+                    elif d["status"] == "finished":
+                        _file.append(d.get("filename", ""))
+                        self.after(0, self._prog_single.set, 1.0)
 
-        thread = threading.Thread(target=apply, daemon=True)
-        thread.start()
+                outtmpl = os.path.join(out_dir, "%(title)s.%(ext)s")
+                postprocessors = [{"key": "FFmpegExtractAudio", "preferredcodec": fmt}]
+                if fmt == "mp3":
+                    postprocessors[0]["preferredquality"] = settings.get("audio_quality", "320")
 
-    def _process_queue(self):
-        """Elabora i messaggi dalla coda (chiamato periodicamente)."""
-        try:
-            while True:
-                msg = self.queue.get_nowait()
-                self._handle_message(msg)
-        except queue.Empty:
-            pass
-        self.after(100, self._process_queue)
+                ydl_opts = {
+                    "outtmpl": outtmpl,
+                    "format": "bestaudio/best",
+                    "quiet": True,
+                    "noplaylist": True,
+                    "postprocessors": postprocessors,
+                    "progress_hooks": [hook],
+                    "socket_timeout": 30,
+                    "extractor_retries": 3,
+                }
+                if speed_limit and speed_limit != "0":
+                    ydl_opts["ratelimit"] = speed_limit
 
-    def _handle_message(self, msg):
-        """Gestisce un singolo messaggio dalla coda."""
-        msg_type = msg[0]
-        try:
-            if msg_type == "videos_loaded":
-                videos = msg[1]
-                self.playlist_videos = videos
-                total = len(videos)
-                self.tree.delete(*self.tree.get_children())
-                for i, v in enumerate(videos):
-                    self.tree.insert(
-                        "",
-                        "end",
-                        iid=str(i),
-                        values=(
-                            i+1,
-                            v["title"],
-                            format_duration(v.get("duration")),
-                            v["uploader"],
-                            "⏳ In attesa",
-                            "0%"
-                        )
-                    )
-                self.status_text.set(T("playlist_videos_found", total=total))
-                self.overall_progress_text.set(f"0/{total} - 0%")
-                self.btn_download.configure(state="normal")
-                log(f"✅ Caricati {total} video")
+                with YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(video_url, download=True)
+                    if info:
+                        base_path = ydl.prepare_filename(info).rsplit(".", 1)[0]
+                        final_file = f"{base_path}.{fmt}"
+                    else:
+                        final_file = None
 
-            elif msg_type == "error":
-                error = msg[1]
-                self.status_text.set(T("playlist_error", error=error))
-                self.btn_download.configure(state="disabled")
-                messagebox.showerror(T("playlist_error"), error, parent=self)
+                # ── ID3 Tag ──────────────────────────────────────────────
+                if write_id3 and final_file and os.path.exists(final_file) and fmt == "mp3":
+                    try:
+                        yt_dur = entry.get("duration")
+                        yt_upl = entry.get("uploader", "")
+                        match  = self._tagger.best_match(title, yt_upl, yt_dur)
+                        if match:
+                            cover = self._tagger.download_cover(match.get("cover_url", ""))
+                            meta  = {k: match.get(k, "")
+                                     for k in ("title", "artist", "album", "year", "genre")}
+                            meta["track_number"] = str(match.get("track_number", ""))
+                            self._tagger.apply_tags(final_file, meta, cover)
+                    except Exception as e_id3:
+                        _log(f"ID3 fallito per '{title}': {e_id3}")
 
-            elif msg_type == "video_start":
-                idx, title = msg[1]
-                self.current_video.set(f"{idx+1}. {title}")
-                self.tree.set(str(idx), T("playlist_column_status"), "📥 Download")
-                self.tree.item(str(idx), tags=("downloading",))
-                self.tree.see(str(idx))
+                success = True
+                self._done_count += 1
+                self.after(0, self._set_row, str(idx), "done", "Completato")
 
-            elif msg_type == "video_progress":
-                idx, percent = msg[1]
-                self.video_progress[idx] = percent
-                self.tree.set(str(idx), T("playlist_column_progress"), f"{percent:.1f}%")
+            except Exception as exc:
+                _log(f"Download fallito '{title}': {exc}")
+                self._fail_count += 1
+                self.after(0, self._set_row, str(idx), "failed", "Errore")
 
-            elif msg_type == "video_done":
-                idx = msg[1]
-                self.tree.set(str(idx), T("playlist_column_status"), "✅ Completato")
-                self.tree.set(str(idx), T("playlist_column_progress"), "100%")
-                self.tree.item(str(idx), tags=("completed",))
+            # Aggiorna progresso totale
+            done_so_far = self._done_count + self._fail_count
+            self.after(0, self._prog_total.set, done_so_far / total)
+            self.after(0, self._update_counter, done_so_far, total)
 
-            elif msg_type == "video_failed":
-                idx = msg[1]
-                self.tree.set(str(idx), T("playlist_column_status"), "❌ Fallito")
-                self.tree.set(str(idx), T("playlist_column_progress"), "ERR")
-                self.tree.item(str(idx), tags=("failed",))
+        # ── Fine ciclo ───────────────────────────────────────────────────────
+        self._is_running = False
 
-            elif msg_type == "video_skipped":
-                idx = msg[1]
-                self.tree.set(str(idx), T("playlist_column_status"), "⏭️ Saltato")
-                self.tree.set(str(idx), T("playlist_column_progress"), "Esistente")
-                self.tree.item(str(idx), tags=("skipped",))
-
-            elif msg_type == "id3_applied":
-                idx = msg[1]
-                current = self.tree.set(str(idx), T("playlist_column_status"))
-                self.tree.set(str(idx), T("playlist_column_status"), current + " 🏷️")
-                self.tree.item(str(idx), tags=("id3_applied",))
-
-            elif msg_type == "id3_failed":
-                idx = msg[1]
-                current = self.tree.set(str(idx), T("playlist_column_status"))
-                self.tree.set(str(idx), T("playlist_column_status"), current + " ⚠️")
-
-            elif msg_type == "overall_progress":
-                completed, failed, total = msg[1]
-                percent = ((completed + failed) / total) * 100 if total else 0
-                self.overall_progress_text.set(f"{completed}/{total} completati ({failed} falliti) - {percent:.1f}%")
-                self.overall_progress_var.set(percent / 100)
-
-            elif msg_type == "download_completed":
-                completed, failed = msg[1]
-                total = len(self.playlist_videos)
-                self.downloading = False
-                self.stop_requested = False
-                self.btn_download.configure(state="normal")
-                self.btn_stop.configure(state="disabled")
-                if self.failed_indices:
-                    self.btn_retry.configure(state="normal")
-                self.status_text.set(T("playlist_completed"))
-                self.current_video.set("")
-                log(f"✅ Playlist completata: {completed}/{total} ok, {failed} falliti")
-                messagebox.showinfo(
-                    T("playlist_completed"),
-                    T("playlist_download_completed", completed=completed, total=total, failed=failed),
-                    parent=self
-                )
-
-            elif msg_type == "download_stopped":
-                completed, failed = msg[1]
-                total = len(self.playlist_videos)
-                self.downloading = False
-                self.stop_requested = False
-                self.btn_download.configure(state="normal")
-                self.btn_stop.configure(state="disabled")
-                if self.failed_indices:
-                    self.btn_retry.configure(state="normal")
-                self.status_text.set(T("playlist_stopped"))
-                self.current_video.set("")
-                log(f"⏹️ Playlist fermata: {completed}/{total} ok, {failed} falliti")
-                messagebox.showinfo(
-                    T("playlist_stopped"),
-                    T("playlist_download_stopped", completed=completed, total=total),
-                    parent=self
-                )
-
-        except Exception as e:
-            log(f"❌ Errore gestione messaggio {msg_type}: {e}")
-
-    def _on_closing(self):
-        """Gestisce la chiusura della finestra."""
-        if self.downloading:
-            if messagebox.askyesno(T("playlist_confirm_title"), T("playlist_confirm_close"), parent=self):
-                self.stop_requested = True
-                self.after(500, self.destroy)
+        if self._is_cancelled:
+            final_msg = f"Download annullato  —  [OK] {self._done_count}  [ERR] {self._fail_count}"
         else:
-            self.destroy()
+            final_msg = (f"Completato!  [OK] {self._done_count} scaricati"
+                         + (f"  [ERR] {self._fail_count} falliti" if self._fail_count else ""))
+            if settings.get("notify_on_complete", True):
+                _notify_desktop("Music Wavver",
+                                f"Playlist completata! {self._done_count} brani scaricati.")
 
+        self.after(0, self._status_var.set, final_msg)
+        self.after(0, self._prog_total.set, 1.0)
+        self.after(0, lambda: self._btn_pause.configure(state="disabled"))
+        self.after(0, lambda: self._btn_cancel.configure(state="disabled"))
+        self.after(0, lambda: self._btn_open.configure(state="normal"))
+        self.after(0, lambda: self._btn_start.configure(state="normal", text="[>>]  Riscaricare?"))
 
-# ---------------------- FUNZIONE DI APERTURA PER APP.PY ----------------------
-def open_playlist_downloader(master, url: str = None):
-    """
-    Funzione chiamata da app.py per aprire il downloader playlist.
-    Restituisce la finestra creata.
-    """
-    if hasattr(master, "playlist_window"):
+    # ──────────────────────────────────────────────────────────────────────────
+    #  UI HELPERS (chiamati via .after() dal worker thread)
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _set_row(self, iid: str, tag: str, status_text: str):
         try:
-            if master.playlist_window.winfo_exists():
-                master.playlist_window.lift()
-                master.playlist_window.focus_set()
-                return master.playlist_window
-        except:
+            vals = list(self._tree.item(iid, "values"))
+            vals[3] = status_text
+            self._tree.item(iid, values=vals, tags=(tag,))
+            self._tree.see(iid)
+        except Exception:
             pass
 
-    # Se url non fornito, prova a prenderlo dall'entry principale
-    if not url and hasattr(master, "query"):
-        url = master.query.get().strip()
+    def _update_counter(self, done: int, total: int):
+        self._count_lbl.configure(
+            text=f"{done} / {total}  |  [OK] {self._done_count}  [ERR] {self._fail_count}")
 
-    if not url:
-        messagebox.showerror("Errore", "Inserisci un URL di playlist YouTube.", parent=master)
-        return None
+    # ──────────────────────────────────────────────────────────────────────────
+    #  CONTROLLI
+    # ──────────────────────────────────────────────────────────────────────────
 
-    # Controlla se è una playlist, altrimenti chiedi conferma
-    if not is_playlist_url(url):
-        if not messagebox.askyesno(
-            T("playlist_prompt_title"),
-            T("playlist_prompt_text"),
-            parent=master
-        ):
-            return None
+    def _toggle_pause(self):
+        if not self._is_paused:
+            self._is_paused = True
+            self._btn_pause.configure(text="[>] Riprendi")
+            self._status_var.set("In pausa - premi [>] Riprendi per continuare")
+        else:
+            self._is_paused = False
+            self._btn_pause.configure(text="|| Pausa")
 
-    try:
-        master.playlist_window = PlaylistDownloader(master, url)
-        return master.playlist_window
-    except Exception as e:
-        log(f"❌ Errore apertura playlist: {e}\n{traceback.format_exc()}")
-        messagebox.showerror(T("playlist_error"), f"Impossibile aprire il downloader:\n{e}", parent=master)
-        return None
+    def _cancel_download(self):
+        if messagebox.askyesno("Annulla Download",
+                               "Sei sicuro di voler annullare il download della playlist?\n"
+                               "I brani già scaricati verranno mantenuti.",
+                               parent=self):
+            self._is_cancelled = True
+            self._is_paused    = False  # sblocca il loop di pausa
 
 
-# ---------------------- TEST STANDALONE ----------------------
+# ==============================================================================
+#  STANDALONE — eseguito direttamente: python playlists.py <url>
+# ==============================================================================
+
+def _standalone_main():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Music Wavver — Playlist Downloader autonomo"
+    )
+    parser.add_argument("url", nargs="?", help="URL della playlist YouTube")
+    args = parser.parse_args()
+
+    ctk.set_appearance_mode("system")
+    ctk.set_default_color_theme("blue")
+
+    if args.url:
+        url = args.url
+    else:
+        # Chiedi URL tramite GUI minima
+        root = ctk.CTk()
+        root.withdraw()
+        import tkinter.simpledialog as sd
+        url = sd.askstring("Music Wavver Playlist",
+                           "Inserisci l'URL della playlist YouTube:",
+                           parent=root)
+        root.destroy()
+        if not url:
+            print("Nessun URL fornito. Uscita.")
+            sys.exit(0)
+
+    # Finestra principale (root) necessaria per CTkToplevel
+    root = ctk.CTk()
+    root.withdraw()  # nascosta — è solo il parent del Toplevel
+
+    win = PlaylistDownloaderWindow(root, url)
+    win.protocol("WM_DELETE_WINDOW", lambda: (root.quit(), root.destroy()))
+
+    root.mainloop()
+
+
 if __name__ == "__main__":
-    print("🎵 Playlist Downloader - Test Standalone")
-    print("=" * 50)
-
-    # Test utility
-    test_urls = [
-        "https://www.youtube.com/playlist?list=PLABC123",
-        "https://www.youtube.com/watch?v=123&list=PLABC123",
-        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    ]
-    for url in test_urls:
-        print(f"\nURL: {url}")
-        print(f"  È playlist? {is_playlist_url(url)}")
-        cleaned = clean_playlist_url(url)
-        print(f"  Pulito: {cleaned}")
-
-    # Test GUI
-    try:
-        ctk.set_appearance_mode(SETTINGS.get("theme", "dark"))
-        ctk.set_default_color_theme("blue")
-
-        class TestApp:
-            def __init__(self):
-                self.root = ctk.CTk()
-                self.root.title("Test Playlist Downloader")
-                self.root.geometry("400x200")
-                self.query = ctk.StringVar()
-                self.playlist_window = None
-
-                frame = ctk.CTkFrame(self.root)
-                frame.pack(pady=20, padx=20, fill="both", expand=True)
-
-                ctk.CTkLabel(frame, text="Incolla URL playlist:", font=("Segoe UI", 14)).pack(pady=10)
-                entry = ctk.CTkEntry(frame, textvariable=self.query, width=350)
-                entry.pack(pady=10)
-                ctk.CTkButton(
-                    frame,
-                    text="Apri Downloader",
-                    command=self.open,
-                    height=35
-                ).pack(pady=20)
-
-            def open(self):
-                open_playlist_downloader(self, self.query.get())
-
-            def run(self):
-                self.root.mainloop()
-
-        app = TestApp()
-        app.run()
-    except Exception as e:
-        print(f"❌ Test GUI fallito: {e}")
-        traceback.print_exc()
+    _standalone_main()

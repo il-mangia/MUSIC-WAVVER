@@ -1,5 +1,20 @@
 MUSIC WAVVER - CHANGELOG
 
+v5.0 (Mar 2026)
+- Updated yt_dlp to v2026.03.03
+- Launcher: Check for GitHub updates
+- Launcher: Automatically download installer .exe from the latest release
+- Launcher: Automatically download FFmpeg for Windows (no admin, user PATH)
+- Launcher: Multilingual (it/en/es/de)
+- Playlist download via playlists.py (external, PyInstaller compatible)
+- Deezer best match auto-selection search
+- Modernized UI, no emojis in the code
+- Integrated yt-dlp updater
+- Playlist URL log
+- Desktop notification upon completion
+- Right-click context menu
+- One-click folder opening
+
 v4.5 (Feb 2026)
 - I hard worked to this. i separated playlist download from app.py.
 - New Setup, more smart and fixes some bugs
