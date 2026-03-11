@@ -1,8 +1,15 @@
-How to install Music Wavver:
+# Music Wavver - Readme
+## How to install/uninstall Music Wavver (Linux only)
 
-    1) Open terminal in the current folder
-    2) Run chmod +x install.sh
-    3) Run ./install.sh in SUDO
+**You can find the instructions in the compressed folder: Music_Wavver_VERSION_Linux_x64.tar.gz**
+
+### Install Music Wavver
+
+    1. Open a terminal on this folder
+    2. Make the installer executable:
+        `chmod +x install.sh`
+    3. Run the installer with administrator privileges:
+        `sudo ./install.sh`
 
 How to uninstall Music Wavver:
     1) Open terminal in the current folder
