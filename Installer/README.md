@@ -22,12 +22,17 @@
     3. Run the uninstaller with administrator privileges:
         `sudo ./uninstall.sh`
 
-How to update Music Wavver:
-    1) Open terminal in the current folder
-    2) Run ./install.sh in SUDO
-    If update doesn't work try:
-    1) Run ./uninstall.sh in SUDO
-    2) Run ./install.sh in SUDO
+---
+
+### Update Music Wavver
+    1. Open a terminal in this folder
+    2. Run the installer again:
+        `sudo ./install.sh`
+    If the update doesn't work:
+    1. Uninstall the program:
+        `sudo ./uninstall.sh`
+    2. Install it again:
+        `sudo ./install.sh`
 
 How to use Music Wavver without installation:
     1) Open terminal in the current folder
