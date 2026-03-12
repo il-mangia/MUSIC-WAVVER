@@ -1,1 +1,1 @@
-python3 -m PyInstaller --onefile --windowed --icon=Logo.ico --add-data languages.json:. --add-data Logo.png:. --add-data playlist_urls.log:. --add-data ytdownloader.log:. app.py
+python3 -m PyInstaller --onefile --windowed --collect-all customtkinter --hidden-import=PIL._tkinter_finder --hidden-import=PIL._imagingtk app.py
