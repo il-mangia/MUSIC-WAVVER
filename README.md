@@ -46,7 +46,7 @@ Developed with **Python 3**, **yt-dlp**, and **customtkinter**, it combines a mo
 3. **Important:** You need to install [requirements](#️-system-requirements).
 
 ### 🐧 Linux
-1. [Download the latest `.zip` release](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)
+1. [Download the latest `.tar.gz` release](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)
 2. Extract it anywhere you want
 3. Run the installer (`sudo ./install.sh`)
 ---
