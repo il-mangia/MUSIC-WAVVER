@@ -78,5 +78,6 @@ For licensing details and source code, visit the [official FFmpeg website](https
 By using Music Wavver, you automatically accept the terms of the FFmpeg license.
 
 ---
-
-**Developed in Italy 🇮🇹 — Built and Tested on Linux by Il Mangia — 2026**
+*Builded and tested on Windows by IL_Mangia*
+*Builded and tested on Linux by TomRiddle901*
+**Developed in Italy 🇮🇹 - 2026**
