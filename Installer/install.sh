@@ -71,6 +71,9 @@ EOF
     fi
 }
 
+pip3 install --upgrade --break-system-packages customtkinter
+pip3 install --upgrade --break-system-packages pillow
+
 install_python_package customtkinter
 install_python_package pillow
 
