@@ -71,11 +71,11 @@ EOF
     fi
 }
 
-pip3 install --upgrade --break-system-packages customtkinter
-pip3 install --upgrade --break-system-packages pillow
-
 install_python_package customtkinter
 install_python_package pillow
+
+pip3 install --upgrade --break-system-packages customtkinter
+pip3 install --upgrade --break-system-packages pillow
 
 # --- Installing program files ---
 echo "Installing program files..."
