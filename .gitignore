@@ -1,0 +1,5 @@
+.idea
+Source Code/build
+Source Code/dist
+Source Code/app.spec
+Dockerfile
