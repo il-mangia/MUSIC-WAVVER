@@ -1,5 +1,14 @@
 MUSIC WAVVER - CHANGELOG
 
+v5.5 (Apr 2026)
+- Updated yt-dlp to the latest version
+- Switched from CustomTkinter to PyQt5 (PyQt6 caused compatibility issues)
+- Updated user interface
+- Added video downloader (MP4 / MOV) with best available quality
+- Improved playlist downloader performance (faster downloads)
+- Expanded language support
+- General bug fixes and performance improvements
+
 v5.0 (Mar 2026)
 - Updated yt_dlp to v2026.03.03
 - Launcher: Check for GitHub updates
@@ -68,6 +77,7 @@ v2.7 closed beta relase (Nov 2025)
 - ID3 auto writer
 
 v2.5 (Nov 2025)
+- Using CustomTkinter instead Tkinter
 - First-launch legal agreement (mandatory acceptance)
 - Multi-language system (IT / EN / ES / DE)
 - New "Play" button to open downloaded file
@@ -109,7 +119,7 @@ v1.0 (2024) — First Beta Prototype
 - Tkinter GUI
 
 ---
-By Il Mangia — 2025
+By Il Mangia
 
 
 
