@@ -1,4 +1,12 @@
 MUSIC WAVVER - CHANGELOG
+v6.0 (May 2026)
+- Removed yt_dlp and all his functions. I'm completely restyling Music Wavver.
+- Switched from PyQt5 to PyQT6
+- Updated user interface
+- Using monochrome API to download instead of youtube. Is better, faster and loseless!
+- Improved playlist downloader performance (faster downloads)
+- Spotify and Deezer support (For Tracks and Playlist Only)
+- High Quality Metadata (Qobuzz + Deezer)
 
 v5.5 (Apr 2026)
 - Updated yt-dlp to the latest version
