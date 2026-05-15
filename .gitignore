@@ -1,5 +1,5 @@
 .idea
-Source Code/build
-Source Code/dist
-Source Code/app.spec
-Dockerfile
+compila.spec
+.venv
+.idea
+Linux Installer/Launcher

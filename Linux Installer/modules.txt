@@ -1,0 +1,4 @@
+requests
+spotipy
+pyqt6
+pip install requests spotipy pyqt6
