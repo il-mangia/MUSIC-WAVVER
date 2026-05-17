@@ -3,6 +3,12 @@
 
 **You can find the instructions in the compressed folder: Music_Wavver_VERSION_Linux_x64.tar.gz**
 
+## Caution:
+**This new version works only on newest Linux systems!**
+Ubuntu: >25.10
+Fedora: >43
+Arch: >2025.0.1
+
 ---
 
 ### Install Music Wavver
