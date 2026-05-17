@@ -1,57 +1,46 @@
 #!/bin/bash
 
-APP_DIR="/opt/music-wavver"
-DESKTOP_FILE="/usr/share/applications/music-wavver.desktop"
-RUN_SCRIPT="$APP_DIR/run.sh"
+APP_NAME="music-wavver"
+APP_DIR="/opt/$APP_NAME"
+DESKTOP_FILE="/usr/share/applications/$APP_NAME.desktop"
+BIN_LINK="/usr/bin/$APP_NAME"
 
-echo "Uninstalling MUSIC WAVVER..."
+echo "Uninstalling $APP_NAME..."
 
-# --- Require sudo ---
+# Richiesta SUDO
 if [ "$EUID" -ne 0 ]; then
-    echo "This uninstaller requires administrator privileges."
-    exec sudo "$0" "$@"
+  echo "Administrator privileges required"
+  exec sudo "$0" "$@"
 fi
 
-# --- Remove program files ---
+# Rimozione directory applicazione
 if [ -d "$APP_DIR" ]; then
-    rm -rf "$APP_DIR"
-    echo "Program directory removed: $APP_DIR"
+  echo "Removing application files..."
+  rm -rf "$APP_DIR"
 else
-    echo "Program directory not found: $APP_DIR"
+  echo "Application directory not found"
 fi
 
-# --- Remove desktop launcher ---
+# Rimozione launcher desktop
 if [ -f "$DESKTOP_FILE" ]; then
-    rm -f "$DESKTOP_FILE"
-    echo "Desktop launcher removed: $DESKTOP_FILE"
-fi
-
-# Update desktop database
-if command -v update-desktop-database >/dev/null 2>&1; then
-    update-desktop-database /usr/share/applications >/dev/null 2>&1
-fi
-
-# --- Ask for dependency removal ---
-read -p "Do you want to remove dependencies? [y/N]: " REMOVE_DEPS
-
-if [[ "$REMOVE_DEPS" =~ ^[Yy]$ ]]; then
-    echo "Removing Python libraries..."
-    pip3 uninstall -y customtkinter pillow
-
-    echo "Removing system dependencies..."
-    if command -v apt >/dev/null 2>&1; then
-        apt remove -y ffmpeg python3-tk
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf remove -y ffmpeg python3-tkinter
-    elif command -v pacman >/dev/null 2>&1; then
-        pacman -Rns --noconfirm ffmpeg tk
-    else
-        echo "Distribution not supported for automatic dependency removal."
-    fi
-
-    echo "Dependencies removed."
+  echo "Removing desktop entry"
+  rm -rf "$DESKTOP_FILE"
 else
-    echo "Dependencies have not been removed."
+  echo "Desktop entry not found"
 fi
 
-echo "MUSIC WAVVER uninstallation completed."
+# Rimozione comando da terminale
+if [ -L "$BIN_LINK" ] || [ -f "$BIN_LINK" ]; then
+  echo "Removing binary link..."
+  rm -rf "$BIN_LINK"
+else
+  echo "Binary link not found..."
+fi
+
+# Aggiorna database desktop
+if command -v update-desktop-database >/dev/null 2>&1, then
+  update-desktop-database /usr/share/applications >/dev/null 2>&1
+fi
+
+echo ""
+echo "$APP_NAME successfully removed!"
