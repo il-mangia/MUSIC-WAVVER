@@ -4,6 +4,7 @@ APP_NAME="music-wavver"
 APP_DIR="/opt/$APP_NAME"
 DESKTOP_FILE="/usr/share/applications/$APP_NAME.desktop"
 BIN_LINK="/usr/bin/$APP_NAME"
+PYTHON_PACKAGES=("requests" "PyQt6" "mutagen" "spotipy")
 
 echo "Uninstalling $APP_NAME..."
 
@@ -35,6 +36,21 @@ if [ -e "$BIN_LINK" ]; then
   rm -rf "$BIN_LINK"
 else
   echo "Binary link not found"
+fi
+
+echo ""
+read -p "Do you want to remove Python dependencies installed? [y/N]: " answer
+
+if [[ "$answer" == "y" ] || [ "$answer" == "Y"]]; then
+  echo "Removing Python dependencies..."
+
+  for pkg in "$PYTHON_PACKAGES"; do
+    pip3 uninstall -y "$pkg"
+  done
+
+  echo "Python dependencies removed"
+else
+  echo "Keeping Python dependencies"
 fi
 
 # Aggiorna database desktop
