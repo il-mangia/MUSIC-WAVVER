@@ -30,15 +30,15 @@ else
 fi
 
 # Rimozione comando da terminale
-if [ -L "$BIN_LINK" ] || [ -f "$BIN_LINK" ]; then
+if [ -e "$BIN_LINK" ]; then
   echo "Removing binary link..."
   rm -rf "$BIN_LINK"
 else
-  echo "Binary link not found..."
+  echo "Binary link not found"
 fi
 
 # Aggiorna database desktop
-if command -v update-desktop-database >/dev/null 2>&1, then
+if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database /usr/share/applications >/dev/null 2>&1
 fi
 
