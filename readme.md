@@ -6,11 +6,12 @@
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
-# Caution!
-At this moment Music Wavver doesn't work because Monochrome API's are closed, we are trying to fix the problem.
-We apologize for the inconvenience.
-The Music Waver Team
-
+# ⚠️ Temporary Service Issue
+Music Wavver is currently unavailable because the Monochrome APIs are temporarily offline.<br>
+We are actively working to resolve the issue as quickly as possible.<br>
+We apologize for the inconvenience and thank you for your patience.<br>
+<br>
+— The Music Wavver Team
 ---
 
 **Developed and tested on Linux and Windows**
