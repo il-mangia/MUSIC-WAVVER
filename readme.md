@@ -6,6 +6,13 @@
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
+# Caution!
+At this momento Music Wavver doesn't work because Monochrome API's are closed, we are trying to fix the problem.
+We apologize for the inconvenience.
+The Music Waver Team
+
+---
+
 **Developed and tested on Linux and Windows**
 <p align="left" style=" font-weight: bold; font-size: 24px;">Made with ❤️ in Italy 🇮🇹.</p>
 '#freemusic'
