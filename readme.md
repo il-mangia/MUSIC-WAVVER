@@ -2,12 +2,12 @@
   <img src="Logo.png" width="150" alt="Music Wavver Logo"/>
 </p>
 
-<h1 align="center">MUSIC WAVVER 6</h1>
+<h1 align="center">MUSIC WAVVER 6.5 + MOBILE!</h1>
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
 # ⚠️ Temporary Service Issue
-Music Wavver is currently unavailable because the Monochrome APIs are temporarily offline.<br>
+Music Wavver is currently unavailable because the principal Monochrome API is temporarily offline.<br>
 We are actively working to resolve the issue as quickly as possible.<br>
 We apologize for the inconvenience and thank you for your patience.<br>
 <br>
