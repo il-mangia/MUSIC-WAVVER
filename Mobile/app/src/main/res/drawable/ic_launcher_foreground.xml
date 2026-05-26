@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- EQ bars -->
+    <group android:translateX="38" android:translateY="38">
+        <path
+            android:fillColor="#B197FC"
+            android:pathData="M4,28 L4,8 Q4,4 8,4 L10,4 Q14,4 14,8 L14,28 Q14,32 10,32 L8,32 Q4,32 4,28Z"/>
+        <path
+            android:fillColor="#B197FC"
+            android:pathData="M18,28 L18,14 Q18,10 22,10 L24,10 Q28,10 28,14 L28,28 Q28,32 24,32 L22,32 Q18,32 18,28Z"/>
+        <path
+            android:fillColor="#F4845F"
+            android:pathData="M32,28 L32,4 Q32,0 36,0 L38,0 Q42,0 42,4 L42,28 Q42,32 38,32 L36,32 Q32,32 32,28Z"/>
+    </group>
+</vector>

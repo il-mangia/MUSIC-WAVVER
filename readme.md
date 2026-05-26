@@ -2,21 +2,15 @@
   <img src="Logo.png" width="150" alt="Music Wavver Logo"/>
 </p>
 
-<h1 align="center">MUSIC WAVVER 6</h1>
+<h1 align="center">MUSIC WAVVER 6.5</h1>
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
-# ⚠️ Temporary Service Issue
-Music Wavver is currently unavailable because the Monochrome APIs are temporarily offline.<br>
-We are actively working to resolve the issue as quickly as possible.<br>
-We apologize for the inconvenience and thank you for your patience.<br>
-<br>
-— The Music Wavver Team
+
 ---
 
-**Developed and tested on Linux and Windows**
+**Developed and tested on Linux, Windows and Android.**
 <p align="left" style=" font-weight: bold; font-size: 24px;">Made with ❤️ in Italy 🇮🇹.</p>
-'#freemusic'
 
 ---
 
@@ -85,5 +79,7 @@ By using Music Wavver, you automatically accept the terms of the FFmpeg license.
 ---
 *Builded and tested on Windows by IL_Mangia* <br>
 *Builded and tested on Linux by TomRiddle901* <br>
-**Developed in Italy 🇮🇹 - 2026**
-**MIT License**
+*Special thanks to our beta testers* <br>
+
+**Developed in Italy 🇮🇹 - 2026** <br>
+([**Open Source Project - MIT**](https://www.opensource.org/licenses/mit-license.php))

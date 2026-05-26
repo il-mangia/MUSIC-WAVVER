@@ -1,7 +1,7 @@
 {
   "it": {
     "window_title": "Music Wavver 6",
-    "app_title": "MUSIC WAVVER 6.0",
+    "app_title": "MUSIC WAVVER 6.5",
     "app_sub": "Cerca · Scarica · Ascolta  —  github.com/il-mangia",
     "search_placeholder": "Cerca artista, brano, album  oppure incolla link Spotify/Deezer…",
     "btn_search": "🔍  Cerca",
@@ -30,6 +30,7 @@
     "dlg_play_title": "Riproduzione",
     "dlg_folder_title": "Apri cartella",
     "settings_title": "Impostazioni  —  Music Wavver 6",
+    "settings_lbl_theme": "🎨  Tema:",
     "settings_lbl_folder": "📁  Cartella di download:",
     "settings_browse_title": "Seleziona cartella di download",
     "btn_save": "✔  Salva",
@@ -104,7 +105,7 @@
   },
   "en": {
     "window_title": "Music Wavver 6",
-    "app_title": "MUSIC WAVVER 6.0",
+    "app_title": "MUSIC WAVVER 6.5",
     "app_sub": "Search · Download · Listen  —  github.com/il-mangia",
     "search_placeholder": "Search artist, track, album  or paste a Spotify/Deezer link…",
     "btn_search": "🔍  Search",

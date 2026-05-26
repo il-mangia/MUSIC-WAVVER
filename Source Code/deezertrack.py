@@ -4,6 +4,12 @@ HEADERS_HTTP = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
+QOBUZ_APIS = [
+    "https://qdl-api.monochrome.tf/api",
+    "https://qobuz.kennyy.com.br/api",
+    "https://mono.scavengerfurs.net/api",
+]
+
 def fmt_dur(seconds: int) -> str:
     m, s = divmod(seconds, 60)
     return f"{m}:{s:02d}"
@@ -112,18 +118,52 @@ def get_deezer_playlist(playlist_id: str, log_cb=None) -> list:
     return tracks if tracks else None
 
 
-def get_monochrome_cover(isrc: str):
+def get_deezer_album(album_id: str, log_cb=None) -> list:
+    """Recupera i brani di un album Deezer."""
+    url = f"https://api.deezer.com/album/{album_id}/tracks?limit=100"
+    tracks = []
+    while url:
+        try:
+            data = requests.get(url, headers=HEADERS_HTTP, timeout=12).json()
+        except Exception as e:
+            if log_cb:
+                log_cb(f"[ALBUM] ❌ Errore Deezer: {e}")
+            break
 
-    """Ottiene la copertina Qobuz (thumbnail) tramite Monochrome API."""
-    url = f"https://qdl-api.monochrome.tf/api/get-music?q={isrc}&offset=0"
-    try:
-        r = requests.get(url, headers=HEADERS_HTTP, timeout=10).json()
-        if not r.get("success"):
-            return None
-        tracks = r.get("data", {}).get("tracks", {}).get("items", [])
-        if not tracks:
-            return None
-        # Prendiamo la thumbnail (il _50.jpg menzionato dall'utente)
-        return tracks[0].get("album", {}).get("image", {}).get("thumbnail")
-    except Exception:
-        return None
+        if data.get("error"):
+            if log_cb:
+                log_cb(f"[ALBUM] ❌ Deezer API error: {data['error']}")
+            break
+
+        for item in data.get("data", []):
+            tid = item.get("id")
+            if not tid:
+                continue
+            detail = get_track_detail(tid)
+            if detail:
+                tracks.append(detail)
+                if log_cb:
+                    log_cb(f"[ALBUM] ✓ {detail['title']} — {detail['artist']}")
+
+        url = data.get("next")
+
+    return tracks if tracks else None
+
+
+def get_monochrome_cover(isrc: str):
+    """Ottiene la copertina Qobuz (thumbnail) con failover su più API."""
+    for base in QOBUZ_APIS:
+        url = f"{base}/get-music?q={isrc}&offset=0"
+        try:
+            r = requests.get(url, headers=HEADERS_HTTP, timeout=10).json()
+            if r.get("success"):
+                tracks = r.get("data", {}).get("tracks", {}).get("items", [])
+                if tracks:
+                    thumb = tracks[0].get("album", {}).get("image", {}).get("thumbnail")
+                    if thumb:
+                        return thumb
+                    large = tracks[0].get("album", {}).get("image", {}).get("large")
+                    return large
+        except Exception:
+            continue
+    return None

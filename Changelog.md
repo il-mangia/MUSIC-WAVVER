@@ -1,5 +1,16 @@
 MUSIC WAVVER - CHANGELOG
+
+v6.5 (May 2026)
+
+* New Monochrome API istances
+* MOBILE STREAMING APP RELASED!
+* Added new themes
+* Fast download!
+* Now can Download albums!
+
+
 v6.0 (May 2026)
+
 - Removed yt_dlp and all his functions. I'm completely restyling Music Wavver.
 - Switched from PyQt5 to PyQT6
 - Updated user interface
@@ -9,6 +20,7 @@ v6.0 (May 2026)
 - High Quality Metadata (Qobuzz + Deezer)
 
 v5.5 (Apr 2026)
+
 - Updated yt-dlp to the latest version
 - Switched from CustomTkinter to PyQt5 (PyQt6 caused compatibility issues)
 - Updated user interface
@@ -18,6 +30,7 @@ v5.5 (Apr 2026)
 - General bug fixes and performance improvements
 
 v5.0 (Mar 2026)
+
 - Updated yt_dlp to v2026.03.03
 - Launcher: Check for GitHub updates
 - Launcher: Automatically download installer .exe from the latest release
@@ -33,6 +46,7 @@ v5.0 (Mar 2026)
 - One-click folder opening
 
 v4.5 (Feb 2026)
+
 - I hard worked to this. i separated playlist download from app.py.
 - New Setup, more smart and fixes some bugs
 - Stable and fastest
@@ -41,6 +55,7 @@ v4.5 (Feb 2026)
 - Better ui for Playlist Downloader!
 
 v4.0 (Jan 2026)
+
 - Finally!!!! Launcher now notifies you when a new update is available.
 - Better UI.. now I added a score to the result, to eliminate the "official videos" and low-quality lyrics.
 - Faster. I cant't believe I could download so fast with a 10MB/s wifi.
@@ -49,14 +64,17 @@ v4.0 (Jan 2026)
 - yt_dlp now is more secure... :) good!
 
 v3.0 (Dic 2025)
+
 - Animation Startup
 - Faster, and minor bugs
 
 v2.9.0 (Dic 2025)
+
 - MP3 ID3 Tagger From Original Sources
 - Faster
 
 v2.8.0 (Nov 2025)
+
 - Using Customtkinter
 - System theme detection - automatically follows OS dark/light mode
 - Fixed Treeview styling - consistent white background with black text for results table
@@ -68,23 +86,27 @@ v2.8.0 (Nov 2025)
 - FFmpeg pre-launch check - detects missing FFmpeg before showing license agreement
 
 v2.7.5 (Nov 2025)
+
 - Updated yt_dlp (u need duno for using wavver now)
 - Error fix
 - Removed auto ID3 for errors
 - More faster
 
 v2.7-fix closed beta relase (Nov 2025)
+
 - Fixed download bug
 - Clean file names
 - Write ID3 setting
 
 v2.7 closed beta relase (Nov 2025)
+
 - yt_dlp auto update
 - Support for YouTube's lists and playlists
 - Fast and secure
 - ID3 auto writer
 
 v2.5 (Nov 2025)
+
 - Using CustomTkinter instead Tkinter
 - First-launch legal agreement (mandatory acceptance)
 - Multi-language system (IT / EN / ES / DE)
@@ -92,50 +114,48 @@ v2.5 (Nov 2025)
 - yt-dlp updated
 
 v.2.3 non-stable beta relase (Nov 2025)
+
 - UI lock during search/download + auto UI reset after 5s
 - Expanded settings (API key storage, language, preferences)
 - Improved ffmpeg detection (Linux/macOS compatibility)
 
 v2.0 – First Stable Release (Oct 2025)
+
 - Switched to yt-dlp (faster, stable YouTube backend)
 - ffmpeg-powered audio conversion (WAV / FLAC / MP3)
 - Modern UI with ttkbootstrap and themes
 - Download speed limit, progress display, logging
 - Smooth multi-platform support (Windows / Linux / macOS)
 
-----------------------------------
+---
+
 Previous Beta Development Builds
-----------------------------------
+--------------------------------
 
 v1.9-fix (2024) — Hotfix
+
 - YouTube extraction fix after backend break
 
 v1.8 (2024) — UI & Logging Update
+
 - Treeview search results table
 - Added file logging system
 
 v1.5 (2024) — Quality & Progress Update
+
 - ffmpeg integration for HQ MP3 (320kbps)
 - Advanced progress bar with ETA
 
 v1.2 (2024) — Search Upgrade
+
 - Keyword search (not only YouTube URLs)
 
 v1.0 (2024) — First Beta Prototype
+
 - Basic pytube downloader
 - MP3 output
 - Tkinter GUI
 
 ---
+
 By Il Mangia
-
-
-
-
-
-
-
-
-
-
-

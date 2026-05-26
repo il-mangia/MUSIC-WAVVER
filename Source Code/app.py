@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 ╔══════════════════════════════════════╗
-║   MUSIC WAVVER 6  —  PyQt6 Edition  ║
-║   github.com/il-mangia              ║
+║   MUSIC WAVVER 6.5                   ║
+║   github.com/il-mangia               ║
 ╚══════════════════════════════════════╝
 """
 
@@ -148,38 +148,87 @@ def _detect_link(query: str):
 
 
 # ──────────────────────────────────────────────────────────────────
-#  PALETTE
+#  CONFIG  (settings.json)
+
+_CONFIG_PATH = os.path.join(_base_dir(), "settings.json")
+_CONFIG: dict = {}
+
+
+def _load_config() -> None:
+    global _CONFIG
+    try:
+        if os.path.exists(_CONFIG_PATH):
+            with open(_CONFIG_PATH, "r", encoding="utf-8") as fh:
+                _CONFIG = json.load(fh)
+    except Exception:
+        _CONFIG = {}
+
+
+def _save_config() -> None:
+    try:
+        with open(_CONFIG_PATH, "w", encoding="utf-8") as fh:
+            json.dump(_CONFIG, fh, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+# ──────────────────────────────────────────────────────────────────
+#  PALETTES  (temi)  ← caricati da themes.json
 # ──────────────────────────────────────────────────────────────────
 
-C = {
-    "bg":         "#090914",
-    "bg2":        "#0e0e22",
-    "bg3":        "#151530",
-    "bg4":        "#1c1c3a",
-    "border":     "#252550",
-    "border_lt":  "#35356a",
-    "purple":     "#7c3aed",
-    "purple_lt":  "#a78bfa",
-    "purple_dk":  "#5b21b6",
-    "blue_dk":    "#1e3060",
-    "blue":       "#3b82f6",
-    "green":      "#10b981",
-    "green_dk":   "#065f46",
-    "cyan":       "#22d3ee",
-    "cyan_dk":    "#164e63",
-    "text":       "#e2e8f0",
-    "text2":      "#8892aa",
-    "text3":      "#4a5270",
-    "red":        "#f87171",
-    "row_alt":    "#0c0c1e",
-    "sel":        "#2d1869",
-}
+THEMES: dict[str, dict] = {}
+
+
+def _load_themes() -> None:
+    global THEMES
+    themes_path = os.path.join(_base_dir(), "themes.json")
+    try:
+        if os.path.exists(themes_path):
+            with open(themes_path, "r", encoding="utf-8") as fh:
+                THEMES = json.load(fh)
+    except Exception:
+        pass
+    if not THEMES:
+        THEMES = {"Dark Purple": {
+            "bg": "#090914", "bg2": "#0e0e22", "bg3": "#151530",
+            "bg4": "#1c1c3a", "border": "#252550", "border_lt": "#35356a",
+            "purple": "#7c3aed", "purple_lt": "#a78bfa", "purple_dk": "#5b21b6",
+            "blue_dk": "#1e3060", "blue": "#3b82f6", "green": "#10b981",
+            "green_dk": "#065f46", "cyan": "#22d3ee", "cyan_dk": "#164e63",
+            "text": "#e2e8f0", "text2": "#8892aa", "text3": "#4a5270",
+            "red": "#f87171", "row_alt": "#0c0c1e", "sel": "#2d1869",
+        }}
+
+
+THEMES_PATH = os.path.join(_base_dir(), "themes.json")
+_load_themes()
+
+# Carica config → seleziona tema
+_load_config()
+_theme_name: str = _CONFIG.get("theme", "Dark Purple")
+if _theme_name not in THEMES:
+    _theme_name = "Dark Purple"
+C: dict = dict(THEMES[_theme_name])
+
+
+def _apply_theme(name: str, save: bool = True) -> None:
+    """Cambia tema a runtime: aggiorna C e rigenera STYLE."""
+    global C, STYLE, _theme_name
+    if name not in THEMES:
+        return
+    _theme_name = name
+    C = dict(THEMES[name])
+    if save:
+        _CONFIG["theme"] = name
+        _save_config()
+    STYLE = _build_style()
 
 # ──────────────────────────────────────────────────────────────────
 #  STYLESHEET
 # ──────────────────────────────────────────────────────────────────
 
-STYLE = f"""
+def _build_style() -> str:
+    return f"""
 /* ── Base ── */
 QWidget {{
     font-family: 'Segoe UI', 'SF Pro Display', 'Helvetica Neue', sans-serif;
@@ -444,6 +493,9 @@ QLabel {{
 }}
 """
 
+
+STYLE: str = _build_style()
+
 HEADERS_HTTP = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -451,6 +503,43 @@ HEADERS_HTTP = {
     ),
     "Accept": "application/json",
 }
+
+# ──────────────────────────────────────────────────────────────────
+#  QOBUZ API FAILOVER
+# ──────────────────────────────────────────────────────────────────
+
+QOBUZ_APIS = [
+    "https://qdl-api.monochrome.tf/api",
+    "https://qobuz.kennyy.com.br/api",
+    "https://mono.scavengerfurs.net/api",
+]
+def _qobuz_request(path: str, params: str, log_cb=None, timeout: int = 20) -> dict:
+    """
+    Prova ogni API Qobuz in sequenza finché una risponde con success=True.
+    path   → es. '/get-music'
+    params → es. '?q=ISRC&offset=0'
+    """
+    last_exc: Exception | None = None
+    for base in QOBUZ_APIS:
+        url = f"{base}{path}{params}"
+        try:
+            if log_cb:
+                log_cb(f"[QOBUZ] Tentativo: {base}")
+            resp = requests.get(url, headers=HEADERS_HTTP, timeout=timeout)
+            data = resp.json()
+            if data.get("success"):
+                if log_cb:
+                    log_cb(f"[QOBUZ] ✅ Risposta OK da {base}")
+                return data
+            # success=False → prova la prossima
+            if log_cb:
+                log_cb(f"[QOBUZ] ⚠️ {base} → success=False, provo la prossima...")
+        except Exception as e:
+            last_exc = e
+            if log_cb:
+                log_cb(f"[QOBUZ] ⚠️ {base} non raggiungibile ({e}), provo la prossima...")
+    # Nessuna API ha funzionato
+    return {"success": False, "_error": str(last_exc)}
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -642,13 +731,10 @@ class DownloadWorker(QThread):
                 return
             self.log.emit(T("dl_log_isrc", isrc=isrc))
 
-            # ── 2. Qobuz ID via Monochrome ────────────────────────
+            # ── 2. Qobuz ID via API failover ─────────────────────
             self.status.emit(T("dl_status_mono"))
             self.progress.emit(15)
-            mono_url = (
-                f"https://qdl-api.monochrome.tf/api/get-music?q={isrc}&offset=0"
-            )
-            mdata = requests.get(mono_url, headers=HEADERS_HTTP, timeout=20).json()
+            mdata = _qobuz_request("/get-music", f"?q={isrc}&offset=0", log_cb=self.log.emit, timeout=20)
 
             if not mdata.get("success") or not mdata["data"]["tracks"]["items"]:
                 self.error.emit(T("err_mono_not_found", isrc=isrc))
@@ -668,11 +754,7 @@ class DownloadWorker(QThread):
             # ── 3. Streaming URL ───────────────────────────────────
             self.status.emit(T("dl_status_stream"))
             self.progress.emit(25)
-            dl_url  = (
-                f"https://qdl-api.monochrome.tf/api/download-music"
-                f"?track_id={q_id}&quality=6"
-            )
-            dl_data = requests.get(dl_url, headers=HEADERS_HTTP, timeout=25).json()
+            dl_data = _qobuz_request("/download-music", f"?track_id={q_id}&quality=6", log_cb=self.log.emit, timeout=25)
 
             if not dl_data.get("success") or "url" not in dl_data.get("data", {}):
                 self.error.emit(T("err_stream_url"))
@@ -685,7 +767,7 @@ class DownloadWorker(QThread):
             self.status.emit(T("dl_status_audio"))
             self.progress.emit(30)
 
-            music_dir = self._music_dir()
+            music_dir = self.custom_dir if self.custom_dir else self._music_dir()
             resp  = requests.get(stream_url, stream=True, timeout=90)
             ct    = resp.headers.get("Content-Type", "").lower()
             src_ext = ".flac" if "flac" in ct else ".wav"
@@ -867,6 +949,18 @@ class PlaylistResolverWorker(QThread):
     def run(self):
         try:
             q = self.url.strip()
+            # Spotify album
+            sp_album = re.match(r"https?://open\.spotify\.com/(?:[\w-]+/)?album/([A-Za-z0-9]+)", q)
+            if sp_album:
+                self.log.emit(f"[ALBUM] Album Spotify rilevato — ID: {sp_album.group(1)}")
+                tracks = spotifytrack.handle_spotify("album", sp_album.group(1), log_callback=self.log.emit)
+                if tracks:
+                    self.finished.emit(tracks)
+                else:
+                    self.log.emit("[ALBUM] ❌ Nessun brano risolto.")
+                    self.error.emit(T("err_playlist_empty"))
+                return
+
             # Spotify playlist
             sp = re.match(r"https?://open\.spotify\.com/(?:[\w-]+/)?playlist/([A-Za-z0-9]+)", q)
             if sp:
@@ -883,6 +977,17 @@ class PlaylistResolverWorker(QThread):
                     self.finished.emit(tracks)
                 else:
                     self.log.emit("[PLAYLIST] ❌ Nessun brano risolto. Assicurati che la playlist sia pubblica.")
+                    self.error.emit(T("err_playlist_empty"))
+                return
+
+            # Deezer album
+            dz_album = re.match(r"https?://(?:www\.)?deezer\.com(?:/[a-z]{2})?/album/(\d+)", q)
+            if dz_album:
+                self.log.emit(f"[ALBUM] Album Deezer rilevato: {dz_album.group(1)}")
+                tracks = deezertrack.get_deezer_album(dz_album.group(1), log_cb=self.log.emit)
+                if tracks:
+                    self.finished.emit(tracks)
+                else:
                     self.error.emit(T("err_playlist_empty"))
                 return
 
@@ -996,7 +1101,8 @@ class PlaylistDialog(QDialog):
 
         # Folder selection
         dir_row = QHBoxLayout()
-        self.dir_edit = QLineEdit(DownloadWorker._music_dir())
+        default_dir = _CONFIG.get("download_dir", DownloadWorker._music_dir())
+        self.dir_edit = QLineEdit(default_dir)
         self.dir_edit.setObjectName("searchBar")
         self.dir_edit.setReadOnly(True)
         dir_row.addWidget(self.dir_edit, stretch=1)
@@ -1230,18 +1336,27 @@ class LogDialog(QDialog):
 # ──────────────────────────────────────────────────────────────────
 
 class SettingsDialog(QDialog):
-    def __init__(self, parent=None, music_dir: str = ""):
+    def __init__(self, parent=None, music_dir: str = "", current_theme: str = ""):
         super().__init__(parent)
         self.setWindowTitle(T("settings_title"))
-        self.resize(440, 160)
+        self.resize(440, 240)
         self.setStyleSheet(STYLE)
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(18, 18, 18, 18)
         lay.setSpacing(12)
 
-        lay.addWidget(QLabel(T("settings_lbl_folder")))
+        lay.addWidget(QLabel(T("settings_lbl_theme")))
+        self.theme_combo = QComboBox()
+        self.theme_combo.setObjectName("fmtCombo")
+        theme_list = list(THEMES.keys())
+        self.theme_combo.addItems(theme_list)
+        if current_theme in theme_list:
+            self.theme_combo.setCurrentText(current_theme)
+        self.theme_combo.currentTextChanged.connect(self._preview_theme)
+        lay.addWidget(self.theme_combo)
 
+        lay.addWidget(QLabel(T("settings_lbl_folder")))
         row = QHBoxLayout()
         self.path_edit = QLineEdit(music_dir)
         self.path_edit.setObjectName("searchBar")
@@ -1264,6 +1379,11 @@ class SettingsDialog(QDialog):
         btn_ok.clicked.connect(self.accept)
         lay.addWidget(btn_ok, alignment=Qt.AlignmentFlag.AlignRight)
 
+    def _preview_theme(self, name: str):
+        if name in THEMES:
+            _apply_theme(name, save=False)
+            self.setStyleSheet(STYLE)
+
     def _browse(self):
         d = QFileDialog.getExistingDirectory(
             self, T("settings_browse_title"), self.path_edit.text()
@@ -1273,6 +1393,9 @@ class SettingsDialog(QDialog):
 
     def get_dir(self) -> str:
         return self.path_edit.text().strip()
+
+    def get_theme(self) -> str:
+        return self.theme_combo.currentText()
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -1597,9 +1720,10 @@ class MusicWavver(QMainWindow):
         self.btn_play.setEnabled(False)
         self._set_status(T("status_preparing", title=t["title"]), 5)
  
+        custom_dir = _CONFIG.get("download_dir")
         self._dl_wk = DownloadWorker(
             t.get("deezer_id"), t["title"], t["artist"], t["album"], fmt,
-            isrc=t.get("isrc")
+            isrc=t.get("isrc"), custom_dir=custom_dir
         )
         self._dl_wk.progress.connect(self.prog.setValue)
         self._dl_wk.status.connect(lambda s: self._set_status(s))
@@ -1639,7 +1763,7 @@ class MusicWavver(QMainWindow):
             QMessageBox.warning(self, T("dlg_play_title"), str(e))
 
     def _open_folder(self):
-        d = DownloadWorker._music_dir()
+        d = _CONFIG.get("download_dir", DownloadWorker._music_dir())
         try:
             if sys.platform == "win32":
                 os.startfile(d)
@@ -1651,8 +1775,15 @@ class MusicWavver(QMainWindow):
             QMessageBox.warning(self, T("dlg_folder_title"), str(e))
 
     def _open_settings(self):
-        dlg = SettingsDialog(self, DownloadWorker._music_dir())
-        dlg.exec()
+        current_dir = _CONFIG.get("download_dir", DownloadWorker._music_dir())
+        dlg = SettingsDialog(self, music_dir=current_dir, current_theme=_theme_name)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            new_dir = dlg.get_dir()
+            new_theme = dlg.get_theme()
+            _CONFIG["download_dir"] = new_dir
+            if new_theme != _theme_name:
+                _apply_theme(new_theme)
+            _save_config()
 
     def _open_playlist(self, initial_url: str = ""):
         dlg = PlaylistDialog(self, initial_url=initial_url)
@@ -1686,8 +1817,8 @@ def main():
         pass
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Music Wavver 6")
-    app.setApplicationVersion("6.0")
+    app.setApplicationName("Music Wavver 6.5")
+    app.setApplicationVersion("6.5")
 
     # ── Carica le traduzioni — se manca il file, esci ──
     if not _load_languages():
