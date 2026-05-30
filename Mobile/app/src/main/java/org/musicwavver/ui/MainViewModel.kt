@@ -21,6 +21,7 @@ sealed class UiState {
         val tracks: List<Track> = emptyList(),
         val artists: List<ArtistSearchItem> = emptyList(),
         val albums: List<AlbumSearchItem> = emptyList(),
+        val playlists: List<DeezerPlaylistSearchItem> = emptyList(),
         val filter: String = "all"
     ) : UiState()
     data class Error(val message: String) : UiState()
@@ -82,7 +83,6 @@ sealed class SpotifyImportState {
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val api     = RetrofitClient.deezerApi
-    private val monoApi = RetrofitClient.monoApi
     private val lrcApi  = RetrofitClient.lrcApi
     private val favRepo = (application as MusicWavverApp).favoritesRepository
     private val persistence = (application as MusicWavverApp).persistence
@@ -104,7 +104,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val shuffleEnabled   = MutableStateFlow(false)
     val repeatMode     = MutableStateFlow(PlayMode.NONE)
     val recentlyPlayed   = MutableStateFlow<List<Track>>(emptyList())
-    val searchHistory    = MutableStateFlow<List<String>>(emptyList())
+    val searchHistory    = MutableStateFlow<List<SearchHistoryItem>>(emptyList())
     val searchSuggestions = MutableStateFlow<List<Any>>(emptyList())
     val sleepTimerRemaining = MutableStateFlow(0L)
     val showQueue        = MutableStateFlow(false)
@@ -325,8 +325,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun search(query: String, filter: String = "all") {
         if (query.isBlank()) return
         lastSearchQuery = query
-        val h = searchHistory.value.toMutableList().also { it.remove(query); it.add(0, query) }
-        searchHistory.value = h.take(10)
+        val h = searchHistory.value.toMutableList().also { it.removeAll { it.query == query }; it.add(0, SearchHistoryItem(query, System.currentTimeMillis())) }
+        searchHistory.value = h.take(20)
         viewModelScope.launch { persistence.saveSearchHistory(searchHistory.value) }
         searchSuggestions.value = emptyList()
         uiState.value = UiState.Loading
@@ -359,8 +359,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     else -> {
-                        val tracks = api.search(query).data ?: emptyList()
-                        uiState.value = UiState.Results(tracks, emptyList(), filter = filter)
+                        val tracksDef = async { api.search(query) }
+                        val artistsDef = async { api.searchArtists(query) }
+                        val albumsDef = async { api.searchAlbums(query) }
+                        val playlistsDef = async { api.searchPlaylists(query) }
+                        val tracks = tracksDef.await().data ?: emptyList()
+                        uiState.value = UiState.Results(
+                            tracks = tracks,
+                            artists = artistsDef.await().data ?: emptyList(),
+                            albums = albumsDef.await().data ?: emptyList(),
+                            playlists = playlistsDef.await().data ?: emptyList(),
+                            filter = "all"
+                        )
                         preWarmIsrc(tracks)
                     }
                 }
@@ -378,11 +388,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         searchJob = viewModelScope.launch {
             delay(300)
-            val history = searchHistory.value.filter { it.contains(query, ignoreCase = true) }
+            val history = searchHistory.value.filter { it.query.contains(query, ignoreCase = true) }.map { it.query }
             try {
-                val results = api.search(query, 5)
-                val tracks = results.data?.take(5) ?: emptyList()
-                searchSuggestions.value = history + tracks
+                val tracksD = async { api.search(query, 5) }
+                val artistsD = async { api.searchArtists(query, 5) }
+                val albumsD  = async { api.searchAlbums(query, 5) }
+                val tracks   = tracksD.await().data?.take(5) ?: emptyList()
+                val artists  = artistsD.await().data?.take(3) ?: emptyList()
+                val albums   = albumsD.await().data?.take(3) ?: emptyList()
+                searchSuggestions.value = history + tracks + artists + albums
             } catch (_: Exception) {
                 searchSuggestions.value = history
             }
@@ -537,16 +551,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun resolveStream(track: Track): String {
         val isrc = resolveIsrc(track)
-        val qid  = qobuzCache.getOrPut(isrc) {
-            val r = monoApi.getMusic(isrc)
-            if (!r.success || r.data?.tracks?.items.isNullOrEmpty()) throw Exception("Not found")
-            r.data!!.tracks!!.items!![0].id
+        val qid  = qobuzCache.getOrPut(isrc) { resolveQobuzId(isrc) }
+        return streamCache.getOrPut(qid) { resolveStreamUrl(qid) }
+    }
+
+    private suspend fun resolveQobuzId(isrc: String): String {
+        for (inst in RetrofitClient.monoInstances) {
+            try {
+                val r = inst.api.getMusic(isrc)
+                if (r.success && !r.data?.tracks?.items.isNullOrEmpty())
+                    return r.data!!.tracks!!.items!![0].id
+            } catch (_: Exception) { }
         }
-        return streamCache.getOrPut(qid) {
-            val r = monoApi.downloadMusic(qid)
-            if (!r.success || r.data?.url.isNullOrBlank()) throw Exception("No URL")
-            r.data!!.url!!
+        throw Exception("Nessuna istanza disponibile per ISRC $isrc")
+    }
+
+    private suspend fun resolveStreamUrl(qid: String): String {
+        for (inst in RetrofitClient.monoInstances) {
+            try {
+                val r = inst.api.downloadMusic(qid, inst.quality)
+                if (r.success && !r.data?.url.isNullOrBlank())
+                    return r.data!!.url!!
+            } catch (_: Exception) { }
         }
+        throw Exception("Nessuna istanza disponibile per ID $qid")
     }
 
     private suspend fun resolveIsrc(track: Track): String =
@@ -656,7 +684,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun removeSearchHistory(q: String) {
-        searchHistory.value = searchHistory.value.filter { it != q }
+        searchHistory.value = searchHistory.value.filter { it.query != q }
         viewModelScope.launch { persistence.saveSearchHistory(searchHistory.value) }
     }
 

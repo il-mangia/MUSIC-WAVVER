@@ -41,17 +41,19 @@ fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
-    searchHistory: List<String> = emptyList(),
+    searchHistory: List<SearchHistoryItem> = emptyList(),
     searchSuggestions: List<Any> = emptyList(),
     onHistorySelect: (String) -> Unit = {},
     onHistoryRemove: (String) -> Unit = {},
-    onClearHistory: () -> Unit = {}
+    onClearHistory: () -> Unit = {},
+    onArtistClick: (ArtistSearchItem) -> Unit = {},
+    onAlbumClick: (AlbumSearchItem) -> Unit = {}
 ) {
     val fm = LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
     val showHistory = focused && query.isBlank() && searchHistory.isNotEmpty()
-    val showSuggestions = focused && query.isNotBlank() && (searchSuggestions.isNotEmpty() || searchHistory.any { it.contains(query, ignoreCase = true) })
-    val filteredHistory = if (query.isNotBlank()) searchHistory.filter { it.contains(query, ignoreCase = true) } else emptyList()
+    val showSuggestions = focused && query.isNotBlank() && (searchSuggestions.isNotEmpty() || searchHistory.any { it.query.contains(query, ignoreCase = true) })
+    val filteredHistory = if (query.isNotBlank()) searchHistory.filter { it.query.contains(query, ignoreCase = true) } else emptyList()
 
     Column {
         OutlinedTextField(
@@ -96,17 +98,17 @@ fun SearchBar(
                         Text("Cancella", color = Purple, fontSize = 12.sp)
                     }
                 }
-                searchHistory.take(6).forEach { q ->
+                searchHistory.take(6).forEach { item ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onHistorySelect(q); fm.clearFocus() }
+                        modifier = Modifier.fillMaxWidth().clickable { onHistorySelect(item.query); fm.clearFocus() }
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Icon(Icons.Default.History, "Cronologia", tint = TextTertiary, modifier = Modifier.size(16.dp))
-                        Text(q, color = TextSecondary, fontSize = 14.sp, modifier = Modifier.weight(1f),
+                        Text(item.query, color = TextSecondary, fontSize = 14.sp, modifier = Modifier.weight(1f),
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        IconButton(onClick = { onHistoryRemove(q) }, modifier = Modifier.size(24.dp)) {
+                        IconButton(onClick = { onHistoryRemove(item.query) }, modifier = Modifier.size(24.dp)) {
                             Icon(Icons.Default.Close, "Rimuovi", tint = TextTertiary, modifier = Modifier.size(14.dp))
                         }
                     }
@@ -116,43 +118,76 @@ fun SearchBar(
 
         AnimatedVisibility(showSuggestions) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Bg2).padding(vertical = 8.dp)) {
-                if (filteredHistory.isNotEmpty()) {
-                    Text("Suggerimenti", color = TextTertiary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    filteredHistory.take(3).forEach { q ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable { onHistorySelect(q); fm.clearFocus() }
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Default.History, "Cronologia", tint = TextTertiary, modifier = Modifier.size(16.dp))
-                            Text(q, color = TextSecondary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
+                filteredHistory.take(3).forEach { item ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onHistorySelect(item.query); fm.clearFocus() }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.History, "Cronologia", tint = TextTertiary, modifier = Modifier.size(16.dp))
+                        Text(item.query, color = TextSecondary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                val tracks = searchSuggestions.filterIsInstance<Track>()
-                if (tracks.isNotEmpty()) {
-                    Text("Brani", color = TextTertiary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                    tracks.forEach { t ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable { onHistorySelect(t.title); fm.clearFocus() }
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(PurpleDim), Alignment.Center) {
-                                Text("\u266A", color = Purple, fontSize = 14.sp)
-                            }
-                            Column(Modifier.weight(1f)) {
-                                Text(t.title, color = TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(t.artist.name, color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                        }
+                searchSuggestions.forEach { suggestion ->
+                    when (suggestion) {
+                        is Track -> SuggestionTrackRow(t = suggestion, onClick = { onHistorySelect(suggestion.title); fm.clearFocus() })
+                        is ArtistSearchItem -> SuggestionArtistRow(a = suggestion, onClick = { onArtistClick(suggestion); fm.clearFocus() })
+                        is AlbumSearchItem -> SuggestionAlbumRow(a = suggestion, onClick = { onAlbumClick(suggestion); fm.clearFocus() })
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SuggestionTrackRow(t: Track, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(PurpleDim), Alignment.Center) {
+            Text("\u266A", color = Purple, fontSize = 14.sp)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(t.title, color = TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(t.artist.name, color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun SuggestionArtistRow(a: ArtistSearchItem, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(Modifier.size(32.dp).clip(CircleShape).background(PurpleDim), Alignment.Center) {
+            Text(a.name.take(1).uppercase(), color = Purple, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(a.name, color = TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Artista", color = TextSecondary, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun SuggestionAlbumRow(a: AlbumSearchItem, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(PurpleDim), Alignment.Center) {
+            Text("\u266A", color = Purple, fontSize = 14.sp)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(a.title, color = TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(a.artist.name, color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -179,10 +214,18 @@ fun FilterBar(filter: String, onFilter: (String) -> Unit) {
 }
 
 @Composable
+fun TypeBadge(label: String, bg: Color = PurpleDim, fg: Color = Purple) {
+    Text(label.uppercase(), color = fg, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+        modifier = Modifier.background(bg, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
+        maxLines = 1)
+}
+
+@Composable
 fun TrackList(
     tracks: List<Track>,
     artists: List<ArtistSearchItem>,
     albums: List<AlbumSearchItem> = emptyList(),
+    playlists: List<DeezerPlaylistSearchItem> = emptyList(),
     filter: String,
     currentTrackId: Long?,
     resolvingTrackId: Long?,
@@ -190,7 +233,8 @@ fun TrackList(
     onTrackClick: (Track) -> Unit,
     onFavClick: (Track) -> Unit,
     onArtistClick: (ArtistSearchItem) -> Unit,
-    onAlbumClick: (AlbumSearchItem) -> Unit = {}
+    onAlbumClick: (AlbumSearchItem) -> Unit = {},
+    onPlaylistClick: (DeezerPlaylistSearchItem) -> Unit = {}
 ) {
     if (filter == "artist") {
         if (artists.isEmpty()) {
@@ -247,8 +291,7 @@ fun TrackList(
         return
     }
 
-    val filtered = if (filter == "all") tracks else tracks.filter { it.type == filter }
-    if (filtered.isEmpty()) {
+    if (tracks.isEmpty() && artists.isEmpty() && albums.isEmpty() && playlists.isEmpty()) {
         Box(Modifier.fillMaxSize(), Alignment.Center) {
             Text("Nessun risultato", color = TextTertiary, fontSize = 14.sp)
         }
@@ -257,16 +300,71 @@ fun TrackList(
 
     LazyColumn(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(filtered, key = { it.id }) { track ->
-            TrackCard(
-                track = track,
-                isFav = favorites.contains(track.id),
-                isNowPlaying = track.id == currentTrackId,
-                isResolving  = track.id == resolvingTrackId,
-                onClick  = { onTrackClick(track) },
-                onFavClick = { onFavClick(track) }
-            )
+        if (tracks.isNotEmpty()) {
+            item { SectionHeader("Brani") }
+            items(tracks, key = { "track_${it.id}" }) { track ->
+                TrackCard(
+                    track = track,
+                    isFav = favorites.contains(track.id),
+                    isNowPlaying = track.id == currentTrackId,
+                    isResolving  = track.id == resolvingTrackId,
+                    onClick  = { onTrackClick(track) },
+                    onFavClick = { onFavClick(track) }
+                )
+            }
         }
+        if (artists.isNotEmpty()) {
+            item { SectionHeader("Artisti") }
+            items(artists, key = { "artist_${it.id}" }) { a ->
+                ArtistCard(a, onClick = { onArtistClick(a) })
+            }
+        }
+        if (albums.isNotEmpty()) {
+            item { SectionHeader("Album") }
+            items(albums, key = { "album_${it.id}" }) { a ->
+                AlbumCard(a, onClick = { onAlbumClick(a) })
+            }
+        }
+        if (playlists.isNotEmpty()) {
+            item { SectionHeader("Playlist") }
+            items(playlists, key = { "pl_${it.id}" }) { p ->
+                PlaylistCard(p, onClick = { onPlaylistClick(p) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(title, color = TextTertiary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.sp, modifier = Modifier.padding(top = 12.dp, bottom = 2.dp, start = 4.dp))
+}
+
+@Composable
+fun PlaylistCard(playlist: DeezerPlaylistSearchItem, onClick: () -> Unit) {
+    val pic = playlist.bestCover
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(Bg2).clickable(onClick = onClick).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(modifier = Modifier.size(54.dp).clip(RoundedCornerShape(12.dp))) {
+            if (!pic.isNullOrBlank()) {
+                AsyncImage(model = pic, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                Box(Modifier.fillMaxSize().background(PurpleDim), Alignment.Center) {
+                    Text("\u266A", color = Purple, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                }
+            }
+        }
+        Column(Modifier.weight(1f)) {
+            Text(playlist.title, color = TextPrimary, fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${playlist.nbTracks} brani", color = TextSecondary, fontSize = 12.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Icon(Icons.Default.ChevronRight, null, Modifier.size(20.dp), TextTertiary)
     }
 }
 

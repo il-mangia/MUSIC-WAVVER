@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "org.musicwavver.app-mergeDebugResources-2:/values-v30/values-v30.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\aless\\.gradle\\caches\\9.2.1\\transforms\\fb98031d2e90117416c8ac3bb454ff6e\\workspace\\transformed\\material3-release\\res\\values-v30\\values-v30.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "72",
+                        "endOffsets": "123"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,12 +1,15 @@
 package org.musicwavver.network
 
 import okhttp3.FormBody
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+
+data class MonoApiConfig(val api: MonoApi, val quality: Int, val name: String)
 
 object RetrofitClient {
     private val okHttp = OkHttpClient.Builder()
@@ -23,13 +26,40 @@ object RetrofitClient {
             .build().create(DeezerApi::class.java)
     }
 
-    val monoApi: MonoApi by lazy {
-        Retrofit.Builder()
-            .baseUrl("https://qobuz.kennyy.com.br/api/")
-            .client(okHttp)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build().create(MonoApi::class.java)
+    private val cookieInterceptor = Interceptor { chain ->
+        val req = chain.request().newBuilder()
+            .addHeader("Cookie", "captcha_verified_at=${System.currentTimeMillis()}")
+            .build()
+        chain.proceed(req)
     }
+
+    private val okHttpWithCookie = okHttp.newBuilder()
+        .addInterceptor(cookieInterceptor)
+        .build()
+
+    val monoInstances: List<MonoApiConfig> = listOf(
+        MonoApiConfig(
+            Retrofit.Builder().baseUrl("https://qobuz.squid.wtf/api/")
+                .client(okHttpWithCookie)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build().create(MonoApi::class.java),
+            27, "squid.wtf"
+        ),
+        MonoApiConfig(
+            Retrofit.Builder().baseUrl("https://qobuz.kennyy.com.br/api/")
+                .client(okHttpWithCookie)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build().create(MonoApi::class.java),
+            27, "kennyy"
+        ),
+        MonoApiConfig(
+            Retrofit.Builder().baseUrl("https://qdl-api.monochrome.tf/api/")
+                .client(okHttp)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build().create(MonoApi::class.java),
+            6, "monochrome"
+        )
+    )
 
     val lrcApi: LrcApi by lazy {
         Retrofit.Builder()

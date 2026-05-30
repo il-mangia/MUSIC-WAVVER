@@ -1,5 +1,14 @@
 MUSIC WAVVER - CHANGELOG
 
+v6.5.1 (May 2026)
+
+* Bug Fixes
+* New Monochrome API istances
+* Saving metadata in FLAC and WAV files
+* Mobile App Fixes
+* Cookie support for qobuz-dl APIs
+
+
 v6.5 (May 2026)
 
 * New Monochrome API istances
@@ -17,7 +26,7 @@ v6.0 (May 2026)
 - Using monochrome API to download instead of youtube. Is better, faster and loseless!
 - Improved playlist downloader performance (faster downloads)
 - Spotify and Deezer support (For Tracks and Playlist Only)
-- High Quality Metadata (Qobuzz + Deezer)
+- High Quality Metadata (Qobuz + Deezer)
 
 v5.5 (Apr 2026)
 
@@ -105,7 +114,12 @@ v2.7 closed beta relase (Nov 2025)
 - Fast and secure
 - ID3 auto writer
 
-v2.5 (Nov 2025)
+---
+
+Previous Beta Development Builds
+--------------------------------
+
+v2.5 (Nov 2025) - First Public Stable Release
 
 - Using CustomTkinter instead Tkinter
 - First-launch legal agreement (mandatory acceptance)
@@ -119,7 +133,7 @@ v.2.3 non-stable beta relase (Nov 2025)
 - Expanded settings (API key storage, language, preferences)
 - Improved ffmpeg detection (Linux/macOS compatibility)
 
-v2.0 – First Stable Release (Oct 2025)
+v2.0 (Nov 2025)
 
 - Switched to yt-dlp (faster, stable YouTube backend)
 - ffmpeg-powered audio conversion (WAV / FLAC / MP3)
@@ -127,31 +141,27 @@ v2.0 – First Stable Release (Oct 2025)
 - Download speed limit, progress display, logging
 - Smooth multi-platform support (Windows / Linux / macOS)
 
----
-
-Previous Beta Development Builds
---------------------------------
-
-v1.9-fix (2024) — Hotfix
+v1.9-fix (Gen 2024) — Hotfix
 
 - YouTube extraction fix after backend break
 
-v1.8 (2024) — UI & Logging Update
+v1.8 (Gen 2024) — UI & Logging Update
 
 - Treeview search results table
 - Added file logging system
 
-v1.5 (2024) — Quality & Progress Update
+v1.5 (Gen 2024) — Quality & Progress Update
 
 - ffmpeg integration for HQ MP3 (320kbps)
 - Advanced progress bar with ETA
 
-v1.2 (2024) — Search Upgrade
+v1.2 (Gen2024) — Search Upgrade
 
 - Keyword search (not only YouTube URLs)
 
-v1.0 (2024) — First Beta Prototype
+v1.0 (Gen 2024) — First Beta Prototype
 
+- Youtube Download
 - Basic pytube downloader
 - MP3 output
 - Tkinter GUI

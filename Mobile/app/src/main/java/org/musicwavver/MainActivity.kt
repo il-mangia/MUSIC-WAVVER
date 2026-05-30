@@ -198,7 +198,9 @@ fun MainScreen(service: PlaybackService?) {
                             searchSuggestions = searchSuggestions,
                             onHistorySelect = { searchQuery = it; vm.search(it); activeTab = NavTab.SEARCH },
                             onHistoryRemove = { vm.removeSearchHistory(it) },
-                            onClearHistory = { vm.clearSearchHistory() }
+                            onClearHistory = { vm.clearSearchHistory() },
+                            onArtistClick = { vm.openArtist(it); activeTab = NavTab.HOME },
+                            onAlbumClick = { searchQuery = "${it.title} ${it.artist.name}"; vm.search(searchQuery); activeTab = NavTab.SEARCH }
                         )
                     }
                 }
@@ -269,6 +271,7 @@ fun MainScreen(service: PlaybackService?) {
                                     tracks = state.tracks,
                                     artists = state.artists,
                                     albums = state.albums,
+                                    playlists = state.playlists,
                                     filter = state.filter,
                                     currentTrackId = currentTrack?.id,
                                     resolvingTrackId = resolvingIndex,
@@ -276,10 +279,13 @@ fun MainScreen(service: PlaybackService?) {
                                     onTrackClick = { vm.resolveAndPlay(it) },
                                     onFavClick = { vm.toggleFav(it) },
                                     onArtistClick = { vm.openArtist(it) },
-                    onAlbumClick = { alb ->
-                        vm.search("${alb.title} ${alb.artist.name}")
-                        vm.setFilter("album")
-                    }
+                                    onAlbumClick = { alb ->
+                                        vm.search("${alb.title} ${alb.artist.name}")
+                                        vm.setFilter("album")
+                                    },
+                                    onPlaylistClick = { pl ->
+                                        vm.openPlaylist(pl.id, pl.title, "\uD83D\uDCC1")
+                                    }
                                 )
                             }
                         }

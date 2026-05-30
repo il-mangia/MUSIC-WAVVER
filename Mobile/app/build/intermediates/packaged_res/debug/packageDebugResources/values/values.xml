@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent">#B197FC</color>
+    <color name="bg">#07070F</color>
+    <color name="surface">#1A1A2E</color>
+    <color name="text">#EEEEF6</color>
+    <color name="text_secondary">#858599</color>
+    <color name="warm">#F4845F</color>
+    <string name="app_name">Music Wavver</string>
+    <style name="Theme.MusicWavver" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+</resources>

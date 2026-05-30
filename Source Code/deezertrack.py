@@ -1,14 +1,22 @@
 import requests
+from datetime import datetime, timezone
 
 HEADERS_HTTP = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
+COOKIES_DEEZER = {
+    "captcha_verified_at": "1780071040497"
+}
+
 QOBUZ_APIS = [
-    "https://qdl-api.monochrome.tf/api",
+    "https://qobuz.squid.wtf/api",
     "https://qobuz.kennyy.com.br/api",
-    "https://mono.scavengerfurs.net/api",
+    "https://qdl-api.monochrome.tf/api",
 ]
+
+def _captcha_timestamp() -> str:
+    return str(int(datetime.now(timezone.utc).timestamp() * 1000))
 
 def fmt_dur(seconds: int) -> str:
     m, s = divmod(seconds, 60)
@@ -19,7 +27,7 @@ def search_deezer_by_name(title: str, artist: str):
     q = f"{artist} {title}"
     url = f"https://api.deezer.com/search?q={requests.utils.quote(q)}"
     try:
-        data = requests.get(url, headers=HEADERS_HTTP, timeout=10).json()
+        data = requests.get(url, headers=HEADERS_HTTP, cookies=COOKIES_DEEZER, timeout=10).json()
         items = data.get("data", [])
         if not items:
             return None
@@ -29,7 +37,7 @@ def search_deezer_by_name(title: str, artist: str):
         # Fetchiamo il dettaglio per avere l'ISRC
         t_info = requests.get(
             f"https://api.deezer.com/track/{best['id']}",
-            headers=HEADERS_HTTP, timeout=10
+            headers=HEADERS_HTTP, cookies=COOKIES_DEEZER, timeout=10
         ).json()
         
         isrc = t_info.get("isrc")
@@ -57,7 +65,7 @@ def get_track_detail(track_id: str):
     """Ottiene i dettagli completi di un brano Deezer (ISRC, cover Qobuz, ecc.)."""
     url = f"https://api.deezer.com/track/{track_id}"
     try:
-        t = requests.get(url, headers=HEADERS_HTTP, timeout=10).json()
+        t = requests.get(url, headers=HEADERS_HTTP, cookies=COOKIES_DEEZER, timeout=10).json()
         if "id" not in t:
             return None
         
@@ -91,7 +99,7 @@ def get_deezer_playlist(playlist_id: str, log_cb=None) -> list:
     tracks = []
     while url:
         try:
-            data = requests.get(url, headers=HEADERS_HTTP, timeout=12).json()
+            data = requests.get(url, headers=HEADERS_HTTP, cookies=COOKIES_DEEZER, timeout=12).json()
         except Exception as e:
             if log_cb:
                 log_cb(f"[PLAYLIST] ❌ Errore Deezer: {e}")
@@ -124,7 +132,7 @@ def get_deezer_album(album_id: str, log_cb=None) -> list:
     tracks = []
     while url:
         try:
-            data = requests.get(url, headers=HEADERS_HTTP, timeout=12).json()
+            data = requests.get(url, headers=HEADERS_HTTP, cookies=COOKIES_DEEZER, timeout=12).json()
         except Exception as e:
             if log_cb:
                 log_cb(f"[ALBUM] ❌ Errore Deezer: {e}")
@@ -153,9 +161,12 @@ def get_deezer_album(album_id: str, log_cb=None) -> list:
 def get_monochrome_cover(isrc: str):
     """Ottiene la copertina Qobuz (thumbnail) con failover su più API."""
     for base in QOBUZ_APIS:
+        cookies = None
+        if "squid.wtf" in base or "kennyy.com.br" in base:
+            cookies = {"captcha_verified_at": _captcha_timestamp()}
         url = f"{base}/get-music?q={isrc}&offset=0"
         try:
-            r = requests.get(url, headers=HEADERS_HTTP, timeout=10).json()
+            r = requests.get(url, headers=HEADERS_HTTP, cookies=cookies, timeout=10).json()
             if r.get("success"):
                 tracks = r.get("data", {}).get("tracks", {}).get("items", [])
                 if tracks:

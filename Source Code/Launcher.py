@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 BY IL MANGIA - 2026
-MUSIC WAVVER 6.5 Launcher
+MUSIC WAVVER 6.5.1 Launcher
 MADE IN ITALY
 """
 
@@ -36,7 +36,7 @@ HEIGHT = 600   # Aumentato ulteriormente per sicurezza
 LOGO_START_Y = -220
 LOGO_END_Y = 55
 
-CURRENT_VERSION = "6.5"
+CURRENT_VERSION = "6.5.1"
 
 GITHUB_REPO = "il-mangia/MUSIC-WAVVER"
 GITHUB_TAGS_URL = f"https://api.github.com/repos/{GITHUB_REPO}/tags"

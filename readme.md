@@ -2,10 +2,11 @@
   <img src="Logo.png" width="150" alt="Music Wavver Logo"/>
 </p>
 
-<h1 align="center">MUSIC WAVVER 6.5</h1>
+<h1 align="center">MUSIC WAVVER 6.5.1</h1>
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
+⚠️ SOMETIMES DOWNLOAD AND PLAY MAY NOT WORK. This is because loseless APIs are not 100% stable. This is not a fixable issue, but I will try to make it more stable as possible. Update Music Wavver to the latest version to get the best experience. If you have any problem, please report it in the [Issues section](https://www.github.com/il-mangia/MUSIC-WAVVER/issues).
 
 ---
 

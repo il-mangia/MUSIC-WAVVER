@@ -1,0 +1,17 @@
+R_DEF: Internal format may change without notice
+local
+color accent
+color bg
+color surface
+color text
+color text_secondary
+color warm
+drawable ic_launcher_foreground
+drawable ic_logo
+drawable widget_bg
+id widget_subtitle
+id widget_title
+layout music_wavver_widget
+string app_name
+style Theme.MusicWavver
+xml music_wavver_widget_info

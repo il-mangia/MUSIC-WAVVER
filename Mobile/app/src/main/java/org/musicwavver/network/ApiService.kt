@@ -14,6 +14,9 @@ interface DeezerApi {
     @GET("search/artist")
     suspend fun searchArtists(@Query("q") q: String, @Query("limit") limit: Int = 20): ArtistSearchResponse
 
+    @GET("search/playlist")
+    suspend fun searchPlaylists(@Query("q") q: String, @Query("limit") limit: Int = 10): DeezerPlaylistSearchResponse
+
     @GET("track/{id}")
     suspend fun getTrack(@Path("id") id: Long): DeezerTrackResponse
 

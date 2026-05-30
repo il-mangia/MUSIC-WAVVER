@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ╔══════════════════════════════════════╗
-║   MUSIC WAVVER 6.5                   ║
+║   MUSIC WAVVER 6.5.1                 ║
 ║   github.com/il-mangia               ║
 ╚══════════════════════════════════════╝
 """
@@ -17,7 +17,7 @@ import subprocess
 import shutil
 import spotipy
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLineEdit, QTableWidget, QTableWidgetItem, QLabel,
@@ -35,6 +35,8 @@ import spotifytrack
 try:
     from mutagen.id3 import ID3, TIT2, TPE1, TALB, APIC
     from mutagen.mp3 import MP3
+    from mutagen.flac import FLAC, Picture
+    from mutagen.wave import WAVE
     MUTAGEN_OK = True
 except ImportError:
     MUTAGEN_OK = False
@@ -509,37 +511,51 @@ HEADERS_HTTP = {
 # ──────────────────────────────────────────────────────────────────
 
 QOBUZ_APIS = [
-    "https://qdl-api.monochrome.tf/api",
+    "https://qobuz.squid.wtf/api",
     "https://qobuz.kennyy.com.br/api",
-    "https://mono.scavengerfurs.net/api",
+    "https://qdl-api.monochrome.tf/api",
 ]
-def _qobuz_request(path: str, params: str, log_cb=None, timeout: int = 20) -> dict:
+def _captcha_timestamp() -> str:
+    return str(int(datetime.now(timezone.utc).timestamp() * 1000))
+
+
+def _qobuz_request(path: str, params: str, log_cb=None, timeout: int = 20, require_url: bool = False) -> dict:
     """
     Prova ogni API Qobuz in sequenza finché una risponde con success=True.
-    path   → es. '/get-music'
-    params → es. '?q=ISRC&offset=0'
+    Se require_url=True, considera valida solo se c'è anche data.url.
+    Aggiunge '_base' al risultato per sapere quale API ha risposto.
     """
     last_exc: Exception | None = None
     for base in QOBUZ_APIS:
-        url = f"{base}{path}{params}"
+        req_params = params
+        cookies = None
+        if "squid.wtf" in base or "kennyy.com.br" in base:
+            req_params = req_params.replace("quality=6", "quality=27")
+            cookies = {"captcha_verified_at": _captcha_timestamp()}
+        url = f"{base}{path}{req_params}"
         try:
             if log_cb:
                 log_cb(f"[QOBUZ] Tentativo: {base}")
-            resp = requests.get(url, headers=HEADERS_HTTP, timeout=timeout)
+            resp = requests.get(url, headers=HEADERS_HTTP, cookies=cookies, timeout=timeout)
             data = resp.json()
-            if data.get("success"):
+            ok = data.get("success") or False
+            if require_url:
+                ok = ok and bool(data.get("data", {}).get("url"))
+            if ok:
                 if log_cb:
                     log_cb(f"[QOBUZ] ✅ Risposta OK da {base}")
+                data["_base"] = base
                 return data
-            # success=False → prova la prossima
+            # Non valida → prova la prossima
             if log_cb:
-                log_cb(f"[QOBUZ] ⚠️ {base} → success=False, provo la prossima...")
+                reason = "success=False" if not data.get("success") else "no url"
+                log_cb(f"[QOBUZ] ⚠️ {base} → {reason}, provo la prossima...")
         except Exception as e:
             last_exc = e
             if log_cb:
                 log_cb(f"[QOBUZ] ⚠️ {base} non raggiungibile ({e}), provo la prossima...")
     # Nessuna API ha funzionato
-    return {"success": False, "_error": str(last_exc)}
+    return {"success": False, "_error": str(last_exc), "_base": ""}
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -755,11 +771,10 @@ class DownloadWorker(QThread):
             self.status.emit(T("dl_status_stream"))
             self.progress.emit(25)
             dl_data = _qobuz_request("/download-music", f"?track_id={q_id}&quality=6", log_cb=self.log.emit, timeout=25)
-
             if not dl_data.get("success") or "url" not in dl_data.get("data", {}):
+                self.log.emit(f"[DL] ❌ Nessuna API ha fornito un URL per track_id={q_id}")
                 self.error.emit(T("err_stream_url"))
                 return
-
             stream_url = dl_data["data"]["url"]
             self.log.emit(T("dl_log_stream"))
 
@@ -841,27 +856,52 @@ class DownloadWorker(QThread):
             self.progress.emit(88)
             self.log.emit(T("dl_log_convert", fmt=self.fmt.upper()))
 
-            # ── 7. ID3 tags (MP3 only) ─────────────────────────────
-            if self.fmt == "mp3" and MUTAGEN_OK:
+            # ── 7. Metadata tags ─────────────────────────────────
+            if MUTAGEN_OK:
                 self.status.emit(T("dl_status_meta"))
                 self.progress.emit(92)
-                audio = MP3(final_path, ID3=ID3)
                 try:
-                    audio.add_tags()
-                except Exception:
-                    pass
-                audio.tags.add(TIT2(encoding=3, text=self.title))
-                audio.tags.add(TPE1(encoding=3, text=self.artist))
-                audio.tags.add(TALB(encoding=3, text=self.album))
-                if cover_url and os.path.exists(temp_cover):
-                    with open(temp_cover, "rb") as img:
-                        audio.tags.add(APIC(
-                            encoding=3, mime="image/jpeg",
-                            type=3, desc="Front Cover",
-                            data=img.read()
-                        ))
-                audio.save()
-                self.log.emit(T("dl_log_meta"))
+                    if self.fmt == "mp3":
+                        audio = MP3(final_path, ID3=ID3)
+                        try:
+                            audio.add_tags()
+                        except Exception:
+                            pass
+                        audio.tags.add(TIT2(encoding=3, text=self.title))
+                        audio.tags.add(TPE1(encoding=3, text=self.artist))
+                        audio.tags.add(TALB(encoding=3, text=self.album))
+                        if cover_url and os.path.exists(temp_cover):
+                            with open(temp_cover, "rb") as img:
+                                audio.tags.add(APIC(
+                                    encoding=3, mime="image/jpeg",
+                                    type=3, desc="Front Cover",
+                                    data=img.read()
+                                ))
+                        audio.save()
+                    elif self.fmt == "flac":
+                        audio = FLAC(final_path)
+                        audio["title"] = self.title
+                        audio["artist"] = self.artist
+                        audio["album"] = self.album
+                        if cover_url and os.path.exists(temp_cover):
+                            pic = Picture()
+                            pic.type = 3
+                            pic.mime = "image/jpeg"
+                            pic.desc = "Front Cover"
+                            with open(temp_cover, "rb") as img:
+                                pic.data = img.read()
+                            audio.clear_pictures()
+                            audio.add_picture(pic)
+                        audio.save()
+                    elif self.fmt == "wav":
+                        audio = WAVE(final_path)
+                        audio["INAM"] = self.title
+                        audio["IART"] = self.artist
+                        audio["IPRD"] = self.album
+                        audio.save()
+                    self.log.emit(T("dl_log_meta"))
+                except Exception as e:
+                    self.log.emit(f"[DL] ⚠️ Metadati non inseriti: {e}")
 
             # ── 8. Cleanup ─────────────────────────────────────────
             for f in [temp_audio, temp_cover]:
@@ -1817,8 +1857,8 @@ def main():
         pass
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Music Wavver 6.5")
-    app.setApplicationVersion("6.5")
+    app.setApplicationName("Music Wavver 6.5.1")
+    app.setApplicationVersion("6.5.1")
 
     # ── Carica le traduzioni — se manca il file, esci ──
     if not _load_languages():

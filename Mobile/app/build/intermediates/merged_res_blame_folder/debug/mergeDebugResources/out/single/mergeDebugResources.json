@@ -1,0 +1,22 @@
+[
+    {
+        "merged": "org.musicwavver.app-debug-4:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "org.musicwavver.app-main-6:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "org.musicwavver.app-debug-4:/xml_music_wavver_widget_info.xml.flat",
+        "source": "org.musicwavver.app-main-6:/xml/music_wavver_widget_info.xml"
+    },
+    {
+        "merged": "org.musicwavver.app-debug-4:/drawable_widget_bg.xml.flat",
+        "source": "org.musicwavver.app-main-6:/drawable/widget_bg.xml"
+    },
+    {
+        "merged": "org.musicwavver.app-debug-4:/layout_music_wavver_widget.xml.flat",
+        "source": "org.musicwavver.app-main-6:/layout/music_wavver_widget.xml"
+    },
+    {
+        "merged": "org.musicwavver.app-debug-4:/drawable_ic_logo.png.flat",
+        "source": "org.musicwavver.app-main-6:/drawable/ic_logo.png"
+    }
+]

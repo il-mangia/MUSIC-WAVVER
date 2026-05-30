@@ -151,3 +151,25 @@ data class SpotifyArtistItem(
 data class SpotifyExternalIds(
     val isrc: String?
 )
+
+// ── SEARCH ──────────────────────────────────────────────────
+data class SearchHistoryItem(val query: String, val timestamp: Long)
+
+data class DeezerPlaylistSearchResponse(val data: List<DeezerPlaylistSearchItem>?)
+
+data class DeezerPlaylistSearchItem(
+    val id: Long,
+    val title: String,
+    @SerializedName("picture_medium") val pictureMedium: String?,
+    @SerializedName("picture_big") val pictureBig: String?,
+    @SerializedName("nb_tracks") val nbTracks: Int = 0
+) {
+    val bestCover: String? get() = pictureBig ?: pictureMedium
+}
+
+sealed class SearchResult {
+    data class TrackResult(val track: org.musicwavver.model.Track) : SearchResult()
+    data class ArtistResult(val artist: ArtistSearchItem) : SearchResult()
+    data class AlbumResult(val album: AlbumSearchItem) : SearchResult()
+    data class PlaylistResult(val playlist: DeezerPlaylistSearchItem) : SearchResult()
+}

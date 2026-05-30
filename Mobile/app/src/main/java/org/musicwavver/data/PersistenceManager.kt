@@ -4,9 +4,11 @@ import android.content.Context
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
+import com.google.gson.JsonSyntaxException
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import org.musicwavver.model.SearchHistoryItem
 import org.musicwavver.model.Track
 import org.musicwavver.model.UserPlaylist
 
@@ -24,12 +26,22 @@ class PersistenceManager(private val context: Context) {
     }
 
     // ── Search History ──────────────────────────────────────────
-    fun searchHistory(): Flow<List<String>> =
+    fun searchHistory(): Flow<List<SearchHistoryItem>> =
         context.appDataStore.data.map { prefs ->
-            fromJson(prefs[KEY_SEARCH_HISTORY], object : TypeToken<List<String>>() {})
+            val raw = prefs[KEY_SEARCH_HISTORY]
+            if (raw.isNullOrBlank()) return@map emptyList()
+            try {
+                gson.fromJson(raw, object : TypeToken<List<SearchHistoryItem>>() {}.type)
+            } catch (_: JsonSyntaxException) {
+                // migrate from old List<String> format
+                val old: List<String> = try {
+                    gson.fromJson(raw, object : TypeToken<List<String>>() {}.type)
+                } catch (_: Exception) { emptyList() }
+                old.map { SearchHistoryItem(it, System.currentTimeMillis()) }
+            }
         }
 
-    suspend fun saveSearchHistory(list: List<String>) {
+    suspend fun saveSearchHistory(list: List<SearchHistoryItem>) {
         context.appDataStore.edit { it[KEY_SEARCH_HISTORY] = toJson(list) }
     }
 
@@ -64,7 +76,7 @@ class PersistenceManager(private val context: Context) {
     // ── JSON helpers ────────────────────────────────────────────
     private inline fun <reified T> fromJson(raw: String?, type: TypeToken<T>): T =
         if (raw.isNullOrBlank()) gson.fromJson("[]", type.type)
-        else gson.fromJson(raw, type.type)
+        else try { gson.fromJson(raw, type.type) } catch (_: Exception) { gson.fromJson("[]", type.type) }
 
     private fun toJson(obj: Any): String = gson.toJson(obj)
 }
