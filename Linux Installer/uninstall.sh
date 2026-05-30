@@ -41,13 +41,13 @@ fi
 
 # Python deps
 echo ""
-read -p "Do you want to remove Python dependencies installed? [y/N]: " answer
+read -r -p "Do you want to remove Python dependencies installed? [y/N]: " answer
 
 if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
   echo "Removing Python dependencies..."
 
   for pkg in "${PYTHON_PACKAGES[@]}"; do
-    pip3 show "$pkg" >/dev/null 2>&1 && pip3 uninstall -y "$pkg"
+    pip3 show "$pkg" >/dev/null 2>&1 && pip3 uninstall --break-system-packages -y "$pkg"
   done
 
   echo "Python dependencies removed"
