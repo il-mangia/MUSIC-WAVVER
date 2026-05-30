@@ -3,3 +3,7 @@ compila.spec
 .venv
 .idea
 Linux Installer/Launcher
+Source Code/Launcher.spec
+Source Code/dist
+Source Code/build
+Source Code/setup.iss
