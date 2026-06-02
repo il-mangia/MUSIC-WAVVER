@@ -92,8 +92,11 @@ cp "Launcher" "$APP_DIR"
 cp "app.py" "$APP_DIR"
 cp "deezertrack.py" "$APP_DIR"
 cp "spotifytrack.py" "$APP_DIR"
+cp "yt.py" "$APP_DIR"
 cp "languages.json" "$APP_DIR"
+cp "themes.json" "$APP_DIR"
 cp "Logo.png" "$APP_DIR"
+cp "Logo.ico" "APP_DIR"
 
 # Permessi
 chmod +x "$APP_DIR/$BIN_NAME"
