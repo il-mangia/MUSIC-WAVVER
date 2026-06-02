@@ -22,10 +22,14 @@ def fmt_dur(seconds: int) -> str:
     m, s = divmod(seconds, 60)
     return f"{m}:{s:02d}"
 
-def search_deezer_by_name(title: str, artist: str):
+COVER_SIZES = {"small": "cover_small", "medium": "cover_medium", "large": "cover_large"}
+
+
+def search_deezer_by_name(title: str, artist: str, cover_quality: str = "medium"):
     """Cerca un brano su Deezer tramite nome e artista per ottenere ISRC e ID."""
     q = f"{artist} {title}"
     url = f"https://api.deezer.com/search?q={requests.utils.quote(q)}"
+    cover_key = COVER_SIZES.get(cover_quality, "cover_large")
     try:
         data = requests.get(url, headers=HEADERS_HTTP, cookies=COOKIES_DEEZER, timeout=10).json()
         items = data.get("data", [])
@@ -41,7 +45,7 @@ def search_deezer_by_name(title: str, artist: str):
         ).json()
         
         isrc = t_info.get("isrc")
-        cover = t_info.get("album", {}).get("cover_small")
+        cover = t_info.get("album", {}).get(cover_key)
         
         # Se abbiamo l'ISRC, proviamo a prendere la copertina Qobuz via Monochrome
         if isrc:
@@ -61,8 +65,9 @@ def search_deezer_by_name(title: str, artist: str):
     except Exception:
         return None
 
-def get_track_detail(track_id: str):
+def get_track_detail(track_id: str, cover_quality: str = "medium"):
     """Ottiene i dettagli completi di un brano Deezer (ISRC, cover Qobuz, ecc.)."""
+    cover_key = COVER_SIZES.get(cover_quality, "cover_large")
     url = f"https://api.deezer.com/track/{track_id}"
     try:
         t = requests.get(url, headers=HEADERS_HTTP, cookies=COOKIES_DEEZER, timeout=10).json()
@@ -70,7 +75,7 @@ def get_track_detail(track_id: str):
             return None
         
         isrc = t.get("isrc")
-        cover = t.get("album", {}).get("cover_small")
+        cover = t.get("album", {}).get(cover_key)
         if isrc:
             qobuz_cover = get_monochrome_cover(isrc)
             if qobuz_cover:
@@ -93,7 +98,7 @@ def handle_deezer_url(track_id: str):
     res = get_track_detail(track_id)
     return [res] if res else None
 
-def get_deezer_playlist(playlist_id: str, log_cb=None) -> list:
+def get_deezer_playlist(playlist_id: str, log_cb=None, cover_quality: str = "medium") -> list:
     """Recupera i brani di una playlist Deezer pubblica (no auth richiesta)."""
     url = f"https://api.deezer.com/playlist/{playlist_id}/tracks?limit=100"
     tracks = []
@@ -114,7 +119,7 @@ def get_deezer_playlist(playlist_id: str, log_cb=None) -> list:
             tid = item.get("id")
             if not tid:
                 continue
-            detail = get_track_detail(tid)
+            detail = get_track_detail(tid, cover_quality)
             if detail:
                 tracks.append(detail)
                 if log_cb:
@@ -126,7 +131,7 @@ def get_deezer_playlist(playlist_id: str, log_cb=None) -> list:
     return tracks if tracks else None
 
 
-def get_deezer_album(album_id: str, log_cb=None) -> list:
+def get_deezer_album(album_id: str, log_cb=None, cover_quality: str = "medium") -> list:
     """Recupera i brani di un album Deezer."""
     url = f"https://api.deezer.com/album/{album_id}/tracks?limit=100"
     tracks = []
@@ -147,7 +152,7 @@ def get_deezer_album(album_id: str, log_cb=None) -> list:
             tid = item.get("id")
             if not tid:
                 continue
-            detail = get_track_detail(tid)
+            detail = get_track_detail(tid, cover_quality)
             if detail:
                 tracks.append(detail)
                 if log_cb:

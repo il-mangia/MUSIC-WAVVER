@@ -43,6 +43,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import org.musicwavver.model.*
+import org.musicwavver.network.YouTubePlayerHandle
+import org.musicwavver.network.YouTubePlayerView
 import org.musicwavver.player.PlaybackService
 import org.musicwavver.ui.*
 import org.musicwavver.ui.theme.*
@@ -75,6 +77,16 @@ class MainActivity : ComponentActivity() {
         Intent(this, PlaybackService::class.java).also {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(it) else startService(it)
             bindService(it, connection, Context.BIND_AUTO_CREATE)
+        }
+
+        UpdateChecker.checkForUpdate { latest ->
+            runOnUiThread {
+                if (latest != null) {
+                    val intent = Intent(this, UpdateActivity::class.java)
+                    intent.putExtra("version", latest)
+                    startActivity(intent)
+                }
+            }
         }
 
         setContent {
@@ -297,6 +309,12 @@ fun MainScreen(service: PlaybackService?) {
         if (showExpanded && !showFullscreenLyrics)
             ExpandedPlayerSection(service, vm, showExpanded, currentTrack, isPlaying, favIds, showQueue, shuffleEnabled, repeatMode, sleepTimer, sleepTimer, lyricsLines, currentLyricIdx, downloadState, ctx)
 
+        val showYT = vm.showYouTubePlayer.collectAsStateWithLifecycle().value
+        val ytVideoId = vm.youTubeVideoId.collectAsStateWithLifecycle().value
+        if (showYT && ytVideoId != null) {
+            YouTubePlayerOverlay(vm, ytVideoId)
+        }
+
         val overlayKey = when {
             showSettings -> 4
             playlistView !is PlaylistViewState.Hidden -> 1
@@ -442,6 +460,7 @@ private fun ExpandedPlayerSection(
 ) {
     val currentPosition by vm.currentPosition.collectAsStateWithLifecycle()
     val duration by vm.duration.collectAsStateWithLifecycle()
+    val sourceLabel by vm.currentStreamSource.collectAsStateWithLifecycle()
 
     ExpandedPlayer(
         visible = showExpanded,
@@ -483,6 +502,7 @@ private fun ExpandedPlayerSection(
         onFullscreenLyrics = { vm.showFullscreenLyrics.value = true; vm.showExpanded.value = false },
         lyricsLines = lyricsLines,
         currentLyricIdx = currentLyricIdx,
+        sourceLabel = sourceLabel,
         onShare = {
             currentTrack?.let { t ->
                 val url = "https://www.deezer.com/track/${t.id}"
@@ -829,3 +849,18 @@ private fun EqualizerDialog(audioSessionId: Int, onDismiss: () -> Unit) {
 }
 
 private data class EqData(val bandCount: Int, val min: Int, val max: Int, val levels: List<Int>)
+
+@Composable
+private fun YouTubePlayerOverlay(vm: MainViewModel, videoId: String) {
+    val handle = remember { YouTubePlayerHandle() }
+    LaunchedEffect(videoId) { handle.loadVideo(videoId) }
+    Box(Modifier.fillMaxSize().background(org.musicwavver.ui.theme.Bg)) {
+        YouTubePlayerView(Modifier.fillMaxSize(), handle)
+        IconButton(
+            onClick = { vm.closeYouTubePlayer() },
+            modifier = Modifier.align(Alignment.TopStart).padding(12.dp).size(40.dp)
+        ) {
+            Icon(Icons.Default.Close, "Chiudi YouTube", tint = org.musicwavver.ui.theme.TextPrimary)
+        }
+    }
+}

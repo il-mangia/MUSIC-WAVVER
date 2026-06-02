@@ -16,6 +16,11 @@
         android:theme="@style/Theme.MusicWavver">
 
         <activity
+            android:name=".UpdateActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MusicWavver" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"

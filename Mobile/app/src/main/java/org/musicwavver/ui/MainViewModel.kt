@@ -110,8 +110,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val showQueue        = MutableStateFlow(false)
     val showFullscreenLyrics = MutableStateFlow(false)
 
-    val lyricsLines      = MutableStateFlow<List<LyricLine>>(emptyList())
-    val currentLyricIdx  = MutableStateFlow(-1)
+    val currentStreamSource = MutableStateFlow("")
+    val youTubeVideoId = MutableStateFlow<String?>(null)
+    val showYouTubePlayer = MutableStateFlow(false)
+
+    val userPlaylists = MutableStateFlow<List<UserPlaylist>>(listOf(UserPlaylist(0, "Preferiti")))
+    val isDarkMode = MutableStateFlow(true)
+    val showSettings = MutableStateFlow(false)
+    val showEqualizer = MutableStateFlow(false)
+
+    val lyricsLines = MutableStateFlow<List<LyricLine>>(emptyList())
+    val currentLyricIdx = MutableStateFlow(-1)
     private var lyricsSyncJob: Job? = null
 
     private val httpClient = okhttp3.OkHttpClient.Builder()
@@ -127,17 +136,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var currentIndex = -1; private set
     var currentQueue = listOf<Track>(); private set
     private var shuffledQueue = listOf<Track>()
-    private var shuffledIndex = -1
-    private var _service: PlaybackService? = null
-    private var lastStreamUrl: String? = null
-    private var sleepJob: Job? = null
-    private var lastSearchQuery = ""
-    private var searchJob: Job? = null
+    private var shuffledIndex = 0
 
-    val userPlaylists = MutableStateFlow<List<UserPlaylist>>(listOf(UserPlaylist(0, "Preferiti")))
-    val isDarkMode = MutableStateFlow(true)
-    val showSettings = MutableStateFlow(false)
-    val showEqualizer = MutableStateFlow(false)
+    private var _service: org.musicwavver.player.PlaybackService? = null
+    private var lastStreamUrl: String? = null
+
+    private var lastSearchQuery = ""
+    private var searchJob: kotlinx.coroutines.Job? = null
+    private var sleepJob: kotlinx.coroutines.Job? = null
 
     init {
         viewModelScope.launch { favRepo.getAll().collect { favorites.value = it } }
@@ -468,6 +474,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     launch { try { resolveStream(currentQueue[nextIdx]) } catch (_: Exception) { } }
                 }
             } catch (e: Exception) {
+                try {
+                    val q = "${track.title} ${track.artist.name}"
+                    val url = java.net.URL("https://pipedapi.com/search?q=${java.net.URLEncoder.encode(q, "UTF-8")}&filter=music")
+                    val json = okhttp3.OkHttpClient().newCall(
+                        okhttp3.Request.Builder().url(url).build()
+                    ).execute().body?.string()
+                    if (json != null) {
+                        val items = com.google.gson.Gson().fromJson(json, PipedSearchResponse::class.java).items
+                        val vid = items?.firstOrNull()?.url?.substringAfter("?v=")
+                        if (vid != null) {
+                            youTubeVideoId.value = vid
+                            showYouTubePlayer.value = true
+                            currentStreamSource.value = "Lossy · YouTube"
+                            isPlaying.value = true
+                            addRecent(track)
+                            return@launch
+                        }
+                    }
+                } catch (_: Exception) { }
                 currentTrack.value = null; isPlaying.value = false
             } finally {
                 resolving.value = false; resolvingIndex.value = null
@@ -495,7 +520,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val ctx = getApplication<android.app.Application>()
             val cacheDir = ctx.cacheDir
 
-            val inputFile  = java.io.File(cacheDir, "dl_${track.id}.flac")
+            val inputFile  = java.io.File(cacheDir, "dl_${track.id}.tmp")
             val coverFile  = java.io.File(cacheDir, "dl_${track.id}.jpg")
             val outputFile = java.io.File(cacheDir, "dl_${track.id}.mp3")
 
@@ -538,7 +563,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             downloadState.value = DownloadState.ERROR
             downloadError.value = e.message ?: "Download fallito"
         } finally {
-            listOf("dl_${track.id}.flac", "dl_${track.id}.jpg", "dl_${track.id}.mp3").forEach {
+            listOf("dl_${track.id}.tmp", "dl_${track.id}.jpg", "dl_${track.id}.mp3").forEach {
                 try { java.io.File(getApplication<android.app.Application>().cacheDir, it).delete() } catch (_: Exception) { }
             }
         }
@@ -570,8 +595,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         for (inst in RetrofitClient.monoInstances) {
             try {
                 val r = inst.api.downloadMusic(qid, inst.quality)
-                if (r.success && !r.data?.url.isNullOrBlank())
+                if (r.success && !r.data?.url.isNullOrBlank()) {
+                    currentStreamSource.value = "LOSSLESS · ${inst.name}"
                     return r.data!!.url!!
+                }
             } catch (_: Exception) { }
         }
         throw Exception("Nessuna istanza disponibile per ID $qid")
@@ -698,6 +725,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         closeAllOverlays(); showExpanded.value = true
     }
     fun closeExpanded() { showExpanded.value = false; showQueue.value = false }
+
+    fun closeYouTubePlayer() { showYouTubePlayer.value = false; youTubeVideoId.value = null; currentTrack.value = null; isPlaying.value = false }
 
     fun playFromQueue(t: Track) {
         showQueue.value = false
@@ -840,3 +869,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 }
+
+private data class PipedSearchResponse(val items: List<PipedSearchItem>?)
+private data class PipedSearchItem(val url: String?, val title: String?)

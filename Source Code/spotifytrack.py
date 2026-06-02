@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from deezertrack import search_deezer_by_name
 
 HEADERS_HTTP = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
 }
 
 def scrape_spotify_data(sp_type: str, sp_id: str):
@@ -48,21 +48,21 @@ def scrape_spotify_data(sp_type: str, sp_id: str):
     except Exception:
         return None
 
-def handle_spotify(sp_type: str, sp_id: str, log_callback=None):
+def handle_spotify(sp_type: str, sp_id: str, log_callback=None, cover_quality: str = "medium"):
     """Gestisce i link Spotify risolvendoli tramite scraping e ricerca Deezer."""
     entity = scrape_spotify_data(sp_type, sp_id)
     if not entity:
         return None
 
     if sp_type == "track":
-        return _handle_track(entity, log_callback)
+        return _handle_track(entity, log_callback, cover_quality)
     elif sp_type == "album":
-        return _handle_album(entity, log_callback)
+        return _handle_album(entity, log_callback, cover_quality)
     elif sp_type == "playlist":
-        return _handle_playlist(entity, log_callback)
+        return _handle_playlist(entity, log_callback, cover_quality)
     return None
 
-def _handle_track(entity, log_callback):
+def _handle_track(entity, log_callback, cover_quality: str = "medium"):
     title = entity.get("title") or entity.get("name", "—")
     
     artists_data = entity.get("artists", [])
@@ -76,10 +76,10 @@ def _handle_track(entity, log_callback):
 
     if log_callback: log_callback(f"[SEARCH] Risoluzione: {artist} - {title}")
     
-    res = search_deezer_by_name(title, artist)
+    res = search_deezer_by_name(title, artist, cover_quality)
     return [res] if res else None
 
-def _handle_album(entity, log_callback):
+def _handle_album(entity, log_callback, cover_quality: str = "medium"):
     items = []
     if "tracks" in entity and "items" in entity["tracks"]:
         items = entity["tracks"]["items"]
@@ -103,11 +103,11 @@ def _handle_album(entity, log_callback):
         
         if artist and "," in artist: artist = artist.split(",")[0].strip()
         if artist: artist = artist.replace("\xa0", " ").strip()
-        
+
         if not title or not artist:
             return None
 
-        res = search_deezer_by_name(title, artist)
+        res = search_deezer_by_name(title, artist, cover_quality)
         if res:
             if log_callback: log_callback(f"[SEARCH] Track: {res['title']}")
             return res
@@ -119,7 +119,7 @@ def _handle_album(entity, log_callback):
         tracks = [r for r in results if r]
     return tracks if tracks else None
 
-def _handle_playlist(entity, log_callback):
+def _handle_playlist(entity, log_callback, cover_quality: str = "medium"):
     items = []
     if "tracks" in entity and "items" in entity["tracks"]:
         items = entity["tracks"]["items"]
@@ -149,7 +149,7 @@ def _handle_playlist(entity, log_callback):
         if not title or not artist:
             return None
 
-        res = search_deezer_by_name(title, artist)
+        res = search_deezer_by_name(title, artist, cover_quality)
         if res:
             if log_callback: log_callback(f"[SEARCH] ✓ {res['title']}")
             return res

@@ -1,5 +1,16 @@
 MUSIC WAVVER - CHANGELOG
 
+
+v6.6 (June 2026)
+* Monochrome is down, we're using a new API, more stable than the previous one.
+* When lossless is not available, the app will automatically download the best quality available from youtube.
+* From sattings you can change main color, the audio source, the output format, the output folder and the filename.
+* Can dowload a list of tracks written in a dialog
+* Statistics of downloaded tracks, albums and artists.
+* Mobile app is also using the new API, and youtube if the new API is down.
+* Mobile app checker for updates.
+*ffmpeg is now included in the installer.
+
 v6.5.1 (May 2026)
 
 * Bug Fixes
@@ -8,7 +19,6 @@ v6.5.1 (May 2026)
 * Mobile App Fixes
 * Cookie support for qobuz-dl APIs
 
-
 v6.5 (May 2026)
 
 * New Monochrome API istances
@@ -16,7 +26,6 @@ v6.5 (May 2026)
 * Added new themes
 * Fast download!
 * Now can Download albums!
-
 
 v6.0 (May 2026)
 

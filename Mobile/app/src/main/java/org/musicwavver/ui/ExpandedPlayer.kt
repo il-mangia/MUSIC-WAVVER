@@ -68,7 +68,8 @@ fun ExpandedPlayer(
     onMoveQueueUp: (Int) -> Unit = {},
     onMoveQueueDown: (Int) -> Unit = {},
     lyricsLines: List<LyricLine> = emptyList(),
-    currentLyricIdx: Int = -1
+    currentLyricIdx: Int = -1,
+    sourceLabel: String = ""
 ) {
     if (!visible || track == null) return
 
@@ -264,8 +265,8 @@ fun ExpandedPlayer(
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    LosslessBars()
-                    Text("LOSSLESS \u00B7 Monochrome", color = Purple, fontSize = 11.sp,
+                    if (!sourceLabel.startsWith("Lossy")) LosslessBars()
+                    Text(sourceLabel.ifBlank { "LOSSLESS \u00B7 Monochrome" }, color = Purple, fontSize = 11.sp,
                         fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
                 }
 

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="#121212">
+
+    <ImageView
+        android:id="@+id/logo"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:src="@drawable/ic_logo"
+        android:contentDescription="Logo" />
+
+    <TextView
+        android:id="@+id/title"
+        android:text="MUSIC WAVVER"
+        android:textSize="22sp"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:layout_marginTop="20dp" />
+
+    <TextView
+        android:id="@+id/subtitle"
+        android:text="Aggiorna alla nuova versione!"
+        android:layout_marginTop="10dp"
+        android:textColor="#CCCCCC"
+        android:textSize="16sp" />
+
+    <Button
+        android:id="@+id/btnGithub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Vai a GitHub"
+        android:layout_marginTop="20dp" />
+
+    <Button
+        android:id="@+id/btnLater"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Dopo"
+        android:layout_marginTop="10dp" />
+
+</LinearLayout>

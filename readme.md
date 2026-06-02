@@ -2,7 +2,7 @@
   <img src="Logo.png" width="150" alt="Music Wavver Logo"/>
 </p>
 
-<h1 align="center">MUSIC WAVVER 6.5.1</h1>
+<h1 align="center">MUSIC WAVVER 6.6</h1>
 
 [➡️ Go to Requirements](#️-system-requirements) | [⬇️ Go to Installation](#-installation) | [⚖️ Go to Disclaimer](#-legal-disclaimer)
 
@@ -33,7 +33,7 @@ Developed with **Python 3**, **Mutagen**, and **PyQT6**, it combines a modern in
 
 ---
 
-## 🛠️ System Requirements
+## 🛠️ Downloading FFMPEG
 - ffmpeg (linux): by cmd (For Linux you can nou use install.sh, or simply `sudo apt install ffmpeg`)
 - ffmpeg (windows): by cmd (`winget install Gyan.FFmpeg`)
 
@@ -44,7 +44,7 @@ Developed with **Python 3**, **Mutagen**, and **PyQT6**, it combines a modern in
 ### 🪟 Windows
 1. [Download the latest `.exe` installer](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)
 2. Extract it into any folder
-3. **Important:** You need to install [requirements](#️-system-requirements).
+3. Optional: You need to install [ffmpeg](#️-Downloading-FFMPEG).
 
 ### 🐧 Linux
 1. [Download the latest `.tar.gz` release](https://github.com/il-mangia/MUSIC-WAVVER/releases/latest)

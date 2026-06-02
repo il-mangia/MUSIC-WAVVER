@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ╔══════════════════════════════════════╗
-║   MUSIC WAVVER 6.5.1                 ║
+║   MUSIC WAVVER 6.6.0                 ║
 ║   github.com/il-mangia               ║
 ╚══════════════════════════════════════╝
 """
@@ -14,16 +14,24 @@ import json
 import locale
 import requests
 import subprocess
+import threading
 import shutil
 import spotipy
 from pathlib import Path
 from datetime import datetime, timezone
+
+if sys.platform == "win32":
+    _SI_HIDE = subprocess.STARTUPINFO()
+    _SI_HIDE.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    _SI_HIDE.wShowWindow = subprocess.SW_HIDE
+else:
+    _SI_HIDE = None
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLineEdit, QTableWidget, QTableWidgetItem, QLabel,
     QComboBox, QProgressBar, QDialog, QTextEdit, QHeaderView,
     QMessageBox, QFrame, QSizePolicy, QFileDialog, QScrollBar,
-    QAbstractItemView
+    QAbstractItemView, QCheckBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
 from PyQt6.QtGui import QFont, QColor, QPalette, QCursor, QFontDatabase, QPixmap, QIcon
@@ -31,6 +39,7 @@ from PyQt6.QtGui import QFont, QColor, QPalette, QCursor, QFontDatabase, QPixmap
 import concurrent.futures
 import deezertrack
 import spotifytrack
+import yt
 
 try:
     from mutagen.id3 import ID3, TIT2, TPE1, TALB, APIC
@@ -54,6 +63,23 @@ def _base_dir() -> str:
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
+
+
+def _find_ffmpeg() -> str:
+    for p in [
+        os.path.join(_base_dir(), "ffmpeg.exe"),
+        os.path.join(_base_dir(), "ffmpeg", "bin", "ffmpeg.exe"),
+    ]:
+        if os.path.isfile(p):
+            return p
+    which = shutil.which("ffmpeg")
+    return which if which else "ffmpeg"
+
+
+_FFMPEG_PATH: str = _find_ffmpeg()
+
+
+# ──────────────────────────────────────────────────────────────────
 
 
 def _load_languages() -> bool:
@@ -175,53 +201,78 @@ def _save_config() -> None:
 
 
 # ──────────────────────────────────────────────────────────────────
-#  PALETTES  (temi)  ← caricati da themes.json
+#  PALETTE  (colore primario personalizzabile)
 # ──────────────────────────────────────────────────────────────────
 
-THEMES: dict[str, dict] = {}
+def _hex_to_hsl(h: str):
+    h = h.lstrip("#")
+    r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
+    mx, mn = max(r, g, b), min(r, g, b)
+    l = (mx + mn) / 2
+    if mx == mn:
+        s = h_ = 0.0
+    else:
+        d = mx - mn
+        s = d / (2 - mx - mn) if l > 0.5 else d / (mx + mn)
+        if mx == r:
+            h_ = (g - b) / d + (6 if g < b else 0)
+        elif mx == g:
+            h_ = (b - r) / d + 2
+        else:
+            h_ = (r - g) / d + 4
+        h_ /= 6
+    return h_ * 360, s * 100, l * 100
 
 
-def _load_themes() -> None:
-    global THEMES
-    themes_path = os.path.join(_base_dir(), "themes.json")
-    try:
-        if os.path.exists(themes_path):
-            with open(themes_path, "r", encoding="utf-8") as fh:
-                THEMES = json.load(fh)
-    except Exception:
-        pass
-    if not THEMES:
-        THEMES = {"Dark Purple": {
-            "bg": "#090914", "bg2": "#0e0e22", "bg3": "#151530",
-            "bg4": "#1c1c3a", "border": "#252550", "border_lt": "#35356a",
-            "purple": "#7c3aed", "purple_lt": "#a78bfa", "purple_dk": "#5b21b6",
-            "blue_dk": "#1e3060", "blue": "#3b82f6", "green": "#10b981",
-            "green_dk": "#065f46", "cyan": "#22d3ee", "cyan_dk": "#164e63",
-            "text": "#e2e8f0", "text2": "#8892aa", "text3": "#4a5270",
-            "red": "#f87171", "row_alt": "#0c0c1e", "sel": "#2d1869",
-        }}
+def _hsl_to_hex(h: float, s: float, l: float) -> str:
+    s /= 100; l /= 100
+    c = (1 - abs(2 * l - 1)) * s
+    x = c * (1 - abs((h / 60) % 2 - 1))
+    m = l - c / 2
+    if h < 60:    r, g, b = c, x, 0
+    elif h < 120: r, g, b = x, c, 0
+    elif h < 180: r, g, b = 0, c, x
+    elif h < 240: r, g, b = 0, x, c
+    elif h < 300: r, g, b = x, 0, c
+    else:         r, g, b = c, 0, x
+    return f"#{int((r+m)*255):02x}{int((g+m)*255):02x}{int((b+m)*255):02x}"
 
 
-THEMES_PATH = os.path.join(_base_dir(), "themes.json")
-_load_themes()
+def _palette(primary: str) -> dict:
+    h, s, l = _hex_to_hsl(primary)
+    # Sfondo: hue del primario, saturazione ridotta, luminosità molto bassa
+    bg_s = max(s * 0.35, 8)
+    return {
+        "bg":       _hsl_to_hex(h, bg_s, 3),
+        "bg2":      _hsl_to_hex(h, bg_s, 5),
+        "bg3":      _hsl_to_hex(h, bg_s, 8),
+        "bg4":      _hsl_to_hex(h, bg_s, 12),
+        "border":   _hsl_to_hex(h, bg_s, 18),
+        "border_lt":_hsl_to_hex(h, min(bg_s + 10, 60), 25),
+        "purple": primary,
+        "purple_lt": _hsl_to_hex(h, min(s + 15, 100), min(l + 18, 90)),
+        "purple_dk": _hsl_to_hex(h, s, max(l - 12, 5)),
+        "blue_dk": "#1e3060", "blue": "#3b82f6", "green": "#10b981",
+        "green_dk": "#065f46", "cyan": "#22d3ee", "cyan_dk": "#164e63",
+        "orange": "#f59e0b",
+        "text": "#e2e8f0", "text2": "#8892aa", "text3": "#4a5270",
+        "red": "#f87171", "row_alt": _hsl_to_hex(h, bg_s, 4),
+        "sel": _hsl_to_hex(h, min(s + 10, 100), max(l - 5, 5)),
+    }
 
-# Carica config → seleziona tema
+
 _load_config()
-_theme_name: str = _CONFIG.get("theme", "Dark Purple")
-if _theme_name not in THEMES:
-    _theme_name = "Dark Purple"
-C: dict = dict(THEMES[_theme_name])
+_primary: str = _CONFIG.get("primary_color", "#7c3aed")
+C: dict = _palette(_primary)
 
 
-def _apply_theme(name: str, save: bool = True) -> None:
-    """Cambia tema a runtime: aggiorna C e rigenera STYLE."""
-    global C, STYLE, _theme_name
-    if name not in THEMES:
-        return
-    _theme_name = name
-    C = dict(THEMES[name])
+def _apply_color(hex_color: str, save: bool = True) -> None:
+    """Cambia il colore primario a runtime."""
+    global C, STYLE, _primary
+    _primary = hex_color
+    C = _palette(hex_color)
     if save:
-        _CONFIG["theme"] = name
+        _CONFIG["primary_color"] = hex_color
         _save_config()
     STYLE = _build_style()
 
@@ -513,7 +564,6 @@ HEADERS_HTTP = {
 QOBUZ_APIS = [
     "https://qobuz.squid.wtf/api",
     "https://qobuz.kennyy.com.br/api",
-    "https://qdl-api.monochrome.tf/api",
 ]
 def _captcha_timestamp() -> str:
     return str(int(datetime.now(timezone.utc).timestamp() * 1000))
@@ -601,10 +651,11 @@ class SearchWorker(QThread):
             self.log.emit(f"[SEARCH] Risoluzione dettagli per {len(items)} brani...")
             
             tracks = []
+            cover_quality = _CONFIG.get("cover_quality", "medium")
             # Usiamo ThreadPoolExecutor per fetchare i dettagli (ISRC + Cover) in parallelo
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
                 # Mappiamo gli ID alle chiamate get_track_detail
-                future_to_id = {executor.submit(deezertrack.get_track_detail, i["id"]): i for i in items}
+                future_to_id = {executor.submit(deezertrack.get_track_detail, i["id"], cover_quality): i for i in items}
                 for future in concurrent.futures.as_completed(future_to_id):
                     res = future.result()
                     if res:
@@ -630,7 +681,8 @@ class SearchWorker(QThread):
             self.error.emit(T("search_no_results"))
 
     def _handle_spotify(self, sp_type: str, sp_id: str):
-        res = spotifytrack.handle_spotify(sp_type, sp_id, log_callback=self.log.emit)
+        cover_quality = _CONFIG.get("cover_quality", "medium")
+        res = spotifytrack.handle_spotify(sp_type, sp_id, log_callback=self.log.emit, cover_quality=cover_quality)
         if res:
             self.log.emit(T("search_result_log", n=len(res)))
             self.result_ready.emit(res)
@@ -712,24 +764,42 @@ class DownloadWorker(QThread):
     finished = pyqtSignal(str)
     error    = pyqtSignal(str)
     log      = pyqtSignal(str)
+    notify   = pyqtSignal(str, str)
+    qobuz_failed = pyqtSignal(str, str, str)  # artist, title, isrc
  
-    def __init__(self, deezer_id, title, artist, album, fmt, isrc=None, custom_dir=None):
+    def __init__(self, deezer_id, title, artist, album, fmt, isrc=None, custom_dir=None,
+                 filename_template="{artist} - {title}", overwrite_existing=True, yt_mode=False,
+                 audio_source="all"):
         super().__init__()
-        self.deezer_id  = deezer_id
-        self.title      = title
-        self.artist     = artist
-        self.album      = album
-        self.fmt        = fmt   # 'mp3' | 'flac' | 'wav'
-        self.isrc       = isrc
-        self.custom_dir = custom_dir
+        self.deezer_id          = deezer_id
+        self.title              = title
+        self.artist             = artist
+        self.album              = album
+        self.fmt                = fmt
+        self.isrc               = isrc
+        self.custom_dir         = custom_dir
+        self.filename_template  = filename_template
+        self.overwrite_existing = overwrite_existing
+        self.yt_mode            = yt_mode
+        self.audio_source       = audio_source
+        self._qobuz_failed      = False
+        self._failed_isrc       = None
  
     def run(self):
         try:
             self.log.emit(T("dl_start_log", title=self.title, artist=self.artist, fmt=self.fmt.upper()))
-            # ── 7. File Finale ────────────────────────────────────
             out_dir = Path(self.custom_dir if self.custom_dir else self._music_dir())
-            filename = self._clean(f"{self.artist} - {self.title}")
-            final_path = out_dir / f"{filename}.{self.fmt}"
+            raw_name = self.filename_template\
+                .replace("{artist}", self._clean(self.artist))\
+                .replace("{title}", self._clean(self.title))\
+                .replace("{album}", self._clean(self.album))
+            final_path = out_dir / f"{raw_name}.{self.fmt}"
+            if not self.overwrite_existing:
+                counter = 1
+                while final_path.exists():
+                    stem = final_path.stem.rstrip(f" ({counter-1})")
+                    final_path = out_dir / f"{stem} ({counter}).{self.fmt}"
+                    counter += 1
             
             # ── 1. ISRC ───────────────────────────────────────────
             isrc = self.isrc
@@ -747,110 +817,154 @@ class DownloadWorker(QThread):
                 return
             self.log.emit(T("dl_log_isrc", isrc=isrc))
 
+            cover_url = ""
+            temp_audio = None
+            src_ext = None
+
             # ── 2. Qobuz ID via API failover ─────────────────────
-            self.status.emit(T("dl_status_mono"))
-            self.progress.emit(15)
-            mdata = _qobuz_request("/get-music", f"?q={isrc}&offset=0", log_cb=self.log.emit, timeout=20)
+            if self.audio_source != "lossy":
+                self.status.emit(T("dl_status_mono"))
+                self.progress.emit(15)
+                mdata = _qobuz_request("/get-music", f"?q={isrc}&offset=0", log_cb=self.log.emit, timeout=20)
 
-            if not mdata.get("success") or not mdata["data"]["tracks"]["items"]:
-                self.error.emit(T("err_mono_not_found", isrc=isrc))
-                return
+                if mdata.get("success") and mdata["data"]["tracks"]["items"]:
+                    track     = mdata["data"]["tracks"]["items"][0]
+                    q_id      = track.get("id")
+                    cover_url = (
+                        track.get("album", {})
+                             .get("image", {})
+                             .get("large", "")
+                    )
+                    self.log.emit(T("dl_log_qobuz", q_id=q_id, has_cover=bool(cover_url)))
 
-            track     = mdata["data"]["tracks"]["items"][0]
-            q_id      = track.get("id")
-            cover_url = (
-                track.get("album", {})
-                     .get("image", {})
-                     .get("large", "")
-            )
-            self.log.emit(
-                T("dl_log_qobuz", q_id=q_id, has_cover=bool(cover_url))
-            )
+                    # ── 3. Streaming URL ─────────────────────────────
+                    self.status.emit(T("dl_status_stream"))
+                    self.progress.emit(25)
+                    dl_data = _qobuz_request("/download-music", f"?track_id={q_id}&quality=6", log_cb=self.log.emit, timeout=25)
+                    if dl_data.get("success") and "url" in dl_data.get("data", {}):
+                        stream_url = dl_data["data"]["url"]
+                        self.log.emit(T("dl_log_stream"))
 
-            # ── 3. Streaming URL ───────────────────────────────────
-            self.status.emit(T("dl_status_stream"))
-            self.progress.emit(25)
-            dl_data = _qobuz_request("/download-music", f"?track_id={q_id}&quality=6", log_cb=self.log.emit, timeout=25)
-            if not dl_data.get("success") or "url" not in dl_data.get("data", {}):
-                self.log.emit(f"[DL] ❌ Nessuna API ha fornito un URL per track_id={q_id}")
-                self.error.emit(T("err_stream_url"))
-                return
-            stream_url = dl_data["data"]["url"]
-            self.log.emit(T("dl_log_stream"))
+                        # ── 4. Download audio da Qobuz ────────────────
+                        self.status.emit(T("dl_status_audio"))
+                        self.progress.emit(30)
+                        music_dir = self.custom_dir if self.custom_dir else self._music_dir()
+                        resp  = requests.get(stream_url, stream=True, timeout=90)
+                        ct    = resp.headers.get("Content-Type", "").lower()
+                        src_ext = ".flac" if "flac" in ct else ".wav"
+                        total      = int(resp.headers.get("content-length", 0))
+                        temp_audio = os.path.join(music_dir, f"_wavver_tmp{src_ext}")
+                        downloaded = 0
+                        with open(temp_audio, "wb") as fh:
+                            for chunk in resp.iter_content(chunk_size=32768):
+                                fh.write(chunk)
+                                downloaded += len(chunk)
+                                if total:
+                                    pct = 30 + int(downloaded / total * 35)
+                                    self.progress.emit(pct)
+                        self.progress.emit(65)
+                        self.log.emit(T("dl_log_audio", kb=downloaded // 1024, ext=src_ext))
+                    else:
+                        self.log.emit(f"[DL] ⚠️ Streaming URL non disponibile, provo fallback YouTube...")
+                else:
+                    self.log.emit(f"[DL] ⚠️ Brano non trovato su Qobuz, provo fallback YouTube...")
+            else:
+                self.log.emit(f"[DL] 🔉 Sorgente Lossy: salto Qobuz, uso YouTube...")
 
-            # ── 4. Download audio ──────────────────────────────────
-            self.status.emit(T("dl_status_audio"))
+            # ── 5. Fallback yt-dlp se Qobuz non ha funzionato ──
+            if not temp_audio:
+                if self.audio_source == "loseless":
+                    self.error.emit(T("err_stream_url"))
+                    return
+                elif self.yt_mode or self.audio_source == "lossy":
+                    self.status.emit(T("dl_status_yt"))
+                    self.progress.emit(40)
+                    self.log.emit("[DL] 🎬 Download da YouTube (yt-dlp)...")
+                    music_dir = self.custom_dir if self.custom_dir else self._music_dir()
+                    yt_out = yt.download_audio(self.artist, self.title, music_dir, raw_name)
+                    if yt_out and os.path.exists(yt_out):
+                        temp_audio = yt_out
+                        src_ext = os.path.splitext(yt_out)[1]
+                        self.log.emit(f"[DL] ✅ Audio scaricato da YouTube: {os.path.basename(yt_out)}")
+                        if not cover_url:
+                            cover_url = ""
+                        self.progress.emit(60)
+                    else:
+                        self.error.emit(T("err_stream_url"))
+                        return
+                else:
+                    self._qobuz_failed = True
+                    self._failed_isrc = isrc
+                    self.qobuz_failed.emit(self.artist, self.title, isrc)
+                    return
             self.progress.emit(30)
-
-            music_dir = self.custom_dir if self.custom_dir else self._music_dir()
-            resp  = requests.get(stream_url, stream=True, timeout=90)
-            ct    = resp.headers.get("Content-Type", "").lower()
-            src_ext = ".flac" if "flac" in ct else ".wav"
-
-            total      = int(resp.headers.get("content-length", 0))
-            temp_audio = os.path.join(music_dir, f"_wavver_tmp{src_ext}")
-            downloaded = 0
-
-            with open(temp_audio, "wb") as fh:
-                for chunk in resp.iter_content(chunk_size=32768):
-                    fh.write(chunk)
-                    downloaded += len(chunk)
-                    if total:
-                        pct = 30 + int(downloaded / total * 35)
-                        self.progress.emit(pct)
-
-            self.progress.emit(65)
-            self.log.emit(
-                T("dl_log_audio", kb=downloaded // 1024, ext=src_ext)
-            )
 
             # ── 5. Download cover ──────────────────────────────────
             temp_cover = os.path.join(music_dir, "_wavver_cover.jpg")
+            if not cover_url and self.deezer_id:
+                cover_key = deezertrack.COVER_SIZES.get(
+                    _CONFIG.get("cover_quality", "medium"), "cover_large"
+                )
+                try:
+                    di = requests.get(
+                        f"https://api.deezer.com/track/{self.deezer_id}",
+                        headers=HEADERS_HTTP, timeout=10
+                    ).json()
+                    for k in ("cover_xl", cover_key, "cover_big", "cover_medium"):
+                        cover_url = di.get("album", {}).get(k, "") or ""
+                        if cover_url:
+                            break
+                except Exception:
+                    pass
             if cover_url:
                 self.status.emit(T("dl_status_cover"))
                 self.progress.emit(67)
-                cr = requests.get(cover_url, timeout=12)
-                with open(temp_cover, "wb") as fh:
-                    fh.write(cr.content)
-                self.log.emit(T("dl_log_cover"))
+                try:
+                    cr = requests.get(cover_url, timeout=12)
+                    if cr.status_code == 200:
+                        with open(temp_cover, "wb") as fh:
+                            fh.write(cr.content)
+                        self.log.emit(T("dl_log_cover"))
+                except Exception as e:
+                    self.log.emit(f"[DL] ⚠️ Cover non scaricabile: {e}")
+                    cover_url = None
 
             # ── 6. Convert / copy ──────────────────────────────────
             self.status.emit(T("dl_status_convert", fmt=self.fmt.upper()))
             self.progress.emit(70)
 
-            clean_name = (
-                f"{self._clean(self.artist)} - {self._clean(self.title)}"
-                f".{self.fmt}"
-            )
-            final_path = os.path.join(music_dir, clean_name)
+            final_path = os.path.join(music_dir, final_path.name)
 
             if self.fmt == "mp3":
                 cmd = [
-                    "ffmpeg", "-y", "-i", temp_audio,
+                    _FFMPEG_PATH, "-y", "-i", temp_audio,
                     "-codec:a", "libmp3lame", "-b:a", "320k",
                     final_path,
                 ]
                 subprocess.run(
                     cmd, check=True,
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    startupinfo=_SI_HIDE
                 )
             elif self.fmt == "flac":
                 if src_ext == ".flac":
                     shutil.copy2(temp_audio, final_path)
                 else:
                     subprocess.run(
-                        ["ffmpeg", "-y", "-i", temp_audio, final_path],
+                        [_FFMPEG_PATH, "-y", "-i", temp_audio, final_path],
                         check=True,
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        startupinfo=_SI_HIDE
                     )
             else:   # wav
                 if src_ext == ".wav":
                     shutil.copy2(temp_audio, final_path)
                 else:
                     subprocess.run(
-                        ["ffmpeg", "-y", "-i", temp_audio, final_path],
+                        [_FFMPEG_PATH, "-y", "-i", temp_audio, final_path],
                         check=True,
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        startupinfo=_SI_HIDE
                     )
 
             self.progress.emit(88)
@@ -914,6 +1028,7 @@ class DownloadWorker(QThread):
             self.progress.emit(100)
             self.status.emit(f"✅  {os.path.basename(final_path)}")
             self.log.emit(T("dl_log_done", path=final_path))
+            self.notify.emit(self.title, self.artist)
             self.finished.emit(final_path)
 
         except subprocess.CalledProcessError:
@@ -993,7 +1108,8 @@ class PlaylistResolverWorker(QThread):
             sp_album = re.match(r"https?://open\.spotify\.com/(?:[\w-]+/)?album/([A-Za-z0-9]+)", q)
             if sp_album:
                 self.log.emit(f"[ALBUM] Album Spotify rilevato — ID: {sp_album.group(1)}")
-                tracks = spotifytrack.handle_spotify("album", sp_album.group(1), log_callback=self.log.emit)
+                cover_quality = _CONFIG.get("cover_quality", "medium")
+                tracks = spotifytrack.handle_spotify("album", sp_album.group(1), log_callback=self.log.emit, cover_quality=cover_quality)
                 if tracks:
                     self.finished.emit(tracks)
                 else:
@@ -1012,7 +1128,8 @@ class PlaylistResolverWorker(QThread):
                     return
                 
                 self.log.emit("[PLAYLIST] Dati Spotify ricevuti, risoluzione brani su Deezer...")
-                tracks = spotifytrack.handle_spotify("playlist", sp.group(1), log_callback=self.log.emit)
+                cover_quality = _CONFIG.get("cover_quality", "medium")
+                tracks = spotifytrack.handle_spotify("playlist", sp.group(1), log_callback=self.log.emit, cover_quality=cover_quality)
                 if tracks:
                     self.finished.emit(tracks)
                 else:
@@ -1024,7 +1141,8 @@ class PlaylistResolverWorker(QThread):
             dz_album = re.match(r"https?://(?:www\.)?deezer\.com(?:/[a-z]{2})?/album/(\d+)", q)
             if dz_album:
                 self.log.emit(f"[ALBUM] Album Deezer rilevato: {dz_album.group(1)}")
-                tracks = deezertrack.get_deezer_album(dz_album.group(1), log_cb=self.log.emit)
+                cover_quality = _CONFIG.get("cover_quality", "medium")
+                tracks = deezertrack.get_deezer_album(dz_album.group(1), log_cb=self.log.emit, cover_quality=cover_quality)
                 if tracks:
                     self.finished.emit(tracks)
                 else:
@@ -1035,7 +1153,8 @@ class PlaylistResolverWorker(QThread):
             dz = re.match(r"https?://(?:www\.)?deezer\.com(?:/[a-z]{2})?/playlist/(\d+)", q)
             if dz:
                 self.log.emit(f"[PLAYLIST] Link Deezer rilevato: {dz.group(1)}")
-                tracks = deezertrack.get_deezer_playlist(dz.group(1), log_cb=self.log.emit)
+                cover_quality = _CONFIG.get("cover_quality", "medium")
+                tracks = deezertrack.get_deezer_playlist(dz.group(1), log_cb=self.log.emit, cover_quality=cover_quality)
                 if tracks:
                     self.finished.emit(tracks)
                 else:
@@ -1055,16 +1174,26 @@ class PlaylistDownloadWorker(QThread):
     item_finished = pyqtSignal(int, str)      # row, status
     log           = pyqtSignal(str)
     finished      = pyqtSignal(int)           # total downloaded
+    ask_yt_fallback = pyqtSignal(str, str, str)  # artist, title, isrc
 
-    def __init__(self, tracks: list, fmt: str, save_dir: str = None):
+    def __init__(self, tracks: list, fmt: str, save_dir: str = None,
+                 filename_template: str = "{artist} - {title}", overwrite_existing: bool = True):
         super().__init__()
-        self.tracks   = tracks
-        self.fmt      = fmt
-        self.save_dir = save_dir
-        self._stop    = False
+        self.tracks            = tracks
+        self.fmt               = fmt
+        self.save_dir          = save_dir
+        self.filename_template = filename_template
+        self.overwrite         = overwrite_existing
+        self._stop             = False
+        self._yt_allowed       = None  # None=unasked, True=yes, False=no
+        self._yt_response_event = threading.Event()
 
     def stop(self):
         self._stop = True
+
+    def set_yt_response(self, allowed: bool):
+        self._yt_allowed = allowed
+        self._yt_response_event.set()
 
     def run(self):
         count = 0
@@ -1079,15 +1208,56 @@ class PlaylistDownloadWorker(QThread):
             try:
                 dw = DownloadWorker(
                     t.get("deezer_id"), t["title"], t["artist"], t["album"], self.fmt,
-                    isrc=t.get("isrc"), custom_dir=self.save_dir
+                    isrc=t.get("isrc"), custom_dir=self.save_dir,
+                    filename_template=self.filename_template,
+                    overwrite_existing=self.overwrite,
+                    audio_source=_CONFIG.get("audio_source", "all"),
                 )
-                # Colleghiamo solo il log per vedere cosa succede
                 dw.log.connect(self.log.emit)
-                # Eseguiamo dw.run() direttamente (è un metodo sincrono se chiamato così)
                 dw.run()
                 
-                # Check se ha avuto successo (dovremmo idealmente avere un flag nel dw)
-                # Per ora assumiamo successo se non lancia eccezioni critiche
+                # ── Gestione fallback Qobuz → YouTube (chiedi una volta) ──
+                if dw._qobuz_failed:
+                    if self._yt_allowed is None:
+                        self._yt_response_event.clear()
+                        self.ask_yt_fallback.emit(
+                            dw.artist, dw.title, dw._failed_isrc or t.get("isrc", "")
+                        )
+                        # Attendi risposta dall'utente (con timeout per poter stoppare)
+                        while not self._yt_response_event.is_set():
+                            if self._stop:
+                                break
+                            self._yt_response_event.wait(0.5)
+                    if self._yt_allowed:
+                        self.item_finished.emit(i, T("playlist_status_downloading"))
+                        dw2 = DownloadWorker(
+                            t.get("deezer_id"), t["title"], t["artist"], t["album"], self.fmt,
+                            isrc=dw._failed_isrc or t.get("isrc"), custom_dir=self.save_dir,
+                            filename_template=self.filename_template,
+                            overwrite_existing=self.overwrite,
+                            yt_mode=True,
+                        )
+                        dw2.log.connect(self.log.emit)
+                        dw2.run()
+                    else:
+                        self.item_finished.emit(i, T("playlist_status_skipped"))
+                        self.log.emit(f"[PL] Fallback YouTube negato per: {t['title']}")
+                        continue
+                
+                # Aggiorna statistiche
+                ext = dw.fmt
+                template = self.filename_template\
+                    .replace("{artist}", DownloadWorker._clean(t["artist"]))\
+                    .replace("{title}", DownloadWorker._clean(t["title"]))\
+                    .replace("{album}", DownloadWorker._clean(t["album"]))
+                final_path = os.path.join(self.save_dir or DownloadWorker._music_dir(), f"{template}.{ext}")
+                size_mb = round(os.path.getsize(final_path) / (1024 * 1024), 1) if os.path.exists(final_path) else 0
+                s = _CONFIG.setdefault("stats", {})
+                s["total_downloads"] = s.get("total_downloads", 0) + 1
+                s["total_mb"] = round(s.get("total_mb", 0) + size_mb, 1)
+                s[f"fmt_{ext}"] = s.get(f"fmt_{ext}", 0) + 1
+                _save_config()
+
                 self.item_finished.emit(i, T("playlist_status_done"))
                 count += 1
             except Exception as e:
@@ -1258,12 +1428,17 @@ class PlaylistDialog(QDialog):
         
         self._log(f"[PLAYLIST] Avvio download sequenziale di {len(self._tracks)} brani in formato {fmt.upper()} in {save_dir}")
 
-        self._dl_wk = PlaylistDownloadWorker(self._tracks, fmt, save_dir=save_dir)
+        self._dl_wk = PlaylistDownloadWorker(
+            self._tracks, fmt, save_dir=save_dir,
+            filename_template=_CONFIG.get("filename_template", "{artist} - {title}"),
+            overwrite_existing=_CONFIG.get("overwrite_existing", True),
+        )
         self._dl_wk.progress_item.connect(self._on_dl_item_progress)
         self._dl_wk.progress_pct.connect(self.prog.setValue)
         self._dl_wk.item_finished.connect(self._on_dl_item_finished)
         self._dl_wk.finished.connect(self._on_dl_finished)
         self._dl_wk.log.connect(self._log)
+        self._dl_wk.ask_yt_fallback.connect(self._on_ask_yt_fallback)
         self._dl_wk.start()
 
     def _on_dl_item_progress(self, current, total, title):
@@ -1277,6 +1452,8 @@ class PlaylistDialog(QDialog):
                 item.setForeground(QColor(C["green"]))
             elif "❌" in status:
                 item.setForeground(QColor(C["red"]))
+            elif "⚠" in status:
+                item.setForeground(QColor(C["orange"]))
             elif "⏳" in status:
                 item.setForeground(QColor(C["cyan"]))
         self.table.scrollToItem(item)
@@ -1287,6 +1464,15 @@ class PlaylistDialog(QDialog):
         self.btn_dl.setEnabled(True)
         self._log(T("playlist_dl_done", n=count))
         QMessageBox.information(self, T("playlist_title"), T("playlist_dl_done", n=count))
+
+    def _on_ask_yt_fallback(self, artist: str, title: str, isrc: str):
+        reply = QMessageBox.question(
+            self, T("dl_ask_yt_title"),
+            T("dl_ask_yt_msg", artist=artist, title=title),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        self._dl_wk.set_yt_response(reply == QMessageBox.StandardButton.Yes)
 
     def _on_error(self, msg):
         self.btn_load.setEnabled(True)
@@ -1376,32 +1562,39 @@ class LogDialog(QDialog):
 # ──────────────────────────────────────────────────────────────────
 
 class SettingsDialog(QDialog):
-    def __init__(self, parent=None, music_dir: str = "", current_theme: str = ""):
+    def __init__(self, parent=None, music_dir: str = "", current_color: str = "#7c3aed",
+                 default_fmt: str = "mp3", cover_quality: str = "medium", language: str = "auto",
+                 filename_template: str = "{artist} - {title}", notify_done: bool = True,
+                 overwrite_existing: bool = True, audio_source: str = "all"):
         super().__init__(parent)
         self.setWindowTitle(T("settings_title"))
-        self.resize(440, 240)
+        self.resize(440, 560)
         self.setStyleSheet(STYLE)
+        self._color = current_color
+        self._orig_color = current_color
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(18, 18, 18, 18)
-        lay.setSpacing(12)
+        lay.setSpacing(8)
 
-        lay.addWidget(QLabel(T("settings_lbl_theme")))
-        self.theme_combo = QComboBox()
-        self.theme_combo.setObjectName("fmtCombo")
-        theme_list = list(THEMES.keys())
-        self.theme_combo.addItems(theme_list)
-        if current_theme in theme_list:
-            self.theme_combo.setCurrentText(current_theme)
-        self.theme_combo.currentTextChanged.connect(self._preview_theme)
-        lay.addWidget(self.theme_combo)
+        lay.addWidget(QLabel(T("settings_lbl_color")))
+        color_row = QHBoxLayout()
+        self.color_btn = QPushButton()
+        self.color_btn.setFixedSize(36, 36)
+        self._update_color_btn()
+        self.color_btn.clicked.connect(self._pick_color)
+        color_row.addWidget(self.color_btn)
+        self.color_lbl = QLabel(current_color)
+        self.color_lbl.setStyleSheet(f"color:{C['text2']};")
+        color_row.addWidget(self.color_lbl)
+        color_row.addStretch()
+        lay.addLayout(color_row)
 
         lay.addWidget(QLabel(T("settings_lbl_folder")))
         row = QHBoxLayout()
         self.path_edit = QLineEdit(music_dir)
         self.path_edit.setObjectName("searchBar")
         row.addWidget(self.path_edit)
-
         btn_browse = QPushButton("…")
         btn_browse.setFixedWidth(38)
         btn_browse.setStyleSheet(
@@ -1412,6 +1605,57 @@ class SettingsDialog(QDialog):
         row.addWidget(btn_browse)
         lay.addLayout(row)
 
+        lay.addWidget(QLabel(T("settings_lbl_fmt")))
+        self.fmt_combo = QComboBox()
+        self.fmt_combo.setObjectName("fmtCombo")
+        self.fmt_combo.addItems(["mp3", "flac", "wav"])
+        self.fmt_combo.setCurrentText(default_fmt)
+        lay.addWidget(self.fmt_combo)
+
+        lay.addWidget(QLabel(T("settings_lbl_cover")))
+        self.cover_combo = QComboBox()
+        self.cover_combo.setObjectName("fmtCombo")
+        self.cover_combo.addItems(["small", "medium", "large"])
+        self.cover_combo.setCurrentText(cover_quality)
+        lay.addWidget(self.cover_combo)
+
+        lay.addWidget(QLabel(T("settings_lbl_filename")))
+        self.filename_edit = QLineEdit(filename_template)
+        self.filename_edit.setObjectName("searchBar")
+        self.filename_edit.setPlaceholderText("{artist} - {title}")
+        lay.addWidget(self.filename_edit)
+        lbl_hint = QLabel(T("settings_filename_hint"))
+        lbl_hint.setStyleSheet(f"color:{C['text3']}; font-size:11px;")
+        lay.addWidget(lbl_hint)
+
+        lay.addWidget(QLabel(T("settings_lbl_lang")))
+        self.lang_combo = QComboBox()
+        self.lang_combo.setObjectName("fmtCombo")
+        self.lang_combo.addItems(["auto", "it", "en"])
+        self.lang_combo.setCurrentText(language)
+        lay.addWidget(self.lang_combo)
+
+        lay.addWidget(QLabel(T("settings_lbl_source")))
+        self.source_combo = QComboBox()
+        self.source_combo.setObjectName("fmtCombo")
+        self.source_combo.addItem(T("settings_source_all"), "all")
+        self.source_combo.addItem(T("settings_source_loseless"), "loseless")
+        self.source_combo.addItem(T("settings_source_lossy"), "lossy")
+        idx = self.source_combo.findData(audio_source)
+        if idx >= 0:
+            self.source_combo.setCurrentIndex(idx)
+        lay.addWidget(self.source_combo)
+
+        self.chk_notify = QCheckBox(T("settings_lbl_notify"))
+        self.chk_notify.setChecked(notify_done)
+        self.chk_notify.setStyleSheet(f"color:{C['text']};")
+        lay.addWidget(self.chk_notify)
+
+        self.chk_overwrite = QCheckBox(T("settings_lbl_overwrite"))
+        self.chk_overwrite.setChecked(overwrite_existing)
+        self.chk_overwrite.setStyleSheet(f"color:{C['text']};")
+        lay.addWidget(self.chk_overwrite)
+
         lay.addStretch()
 
         btn_ok = QPushButton(T("btn_save"))
@@ -1419,9 +1663,19 @@ class SettingsDialog(QDialog):
         btn_ok.clicked.connect(self.accept)
         lay.addWidget(btn_ok, alignment=Qt.AlignmentFlag.AlignRight)
 
-    def _preview_theme(self, name: str):
-        if name in THEMES:
-            _apply_theme(name, save=False)
+    def _update_color_btn(self):
+        self.color_btn.setStyleSheet(
+            f"background:{self._color};border:2px solid {C['border_lt']};border-radius:8px;"
+        )
+
+    def _pick_color(self):
+        from PyQt6.QtWidgets import QColorDialog
+        c = QColorDialog.getColor()
+        if c.isValid():
+            self._color = c.name()
+            self._update_color_btn()
+            self.color_lbl.setText(self._color)
+            _apply_color(self._color, save=False)
             self.setStyleSheet(STYLE)
 
     def _browse(self):
@@ -1434,8 +1688,176 @@ class SettingsDialog(QDialog):
     def get_dir(self) -> str:
         return self.path_edit.text().strip()
 
-    def get_theme(self) -> str:
-        return self.theme_combo.currentText()
+    def get_color(self) -> str:
+        return self._color
+
+    def get_fmt(self) -> str:
+        return self.fmt_combo.currentText()
+
+    def get_cover_quality(self) -> str:
+        return self.cover_combo.currentText()
+
+    def get_language(self) -> str:
+        return self.lang_combo.currentText()
+
+    def get_filename_template(self) -> str:
+        return self.filename_edit.text().strip() or "{artist} - {title}"
+
+    def get_notify_done(self) -> bool:
+        return self.chk_notify.isChecked()
+
+    def get_overwrite_existing(self) -> bool:
+        return self.chk_overwrite.isChecked()
+
+    def get_audio_source(self) -> str:
+        return self.source_combo.currentData()
+
+    def reject(self):
+        if self._color != self._orig_color:
+            _apply_color(self._orig_color, save=False)
+            p = self.parent()
+            if p and hasattr(p, "_refresh_styles"):
+                p._refresh_styles()
+            elif p:
+                p.setStyleSheet(STYLE)
+        super().reject()
+
+
+# ──────────────────────────────────────────────────────────────────
+#  STATS DIALOG
+# ──────────────────────────────────────────────────────────────────
+
+class StatsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(T("stats_title"))
+        self.resize(360, 260)
+        self.setStyleSheet(STYLE)
+
+        s = _CONFIG.get("stats", {})
+        total = s.get("total_downloads", 0)
+        mb = s.get("total_mb", 0)
+        mp3_n = s.get("fmt_mp3", 0)
+        flac_n = s.get("fmt_flac", 0)
+        wav_n = s.get("fmt_wav", 0)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 24, 24, 24)
+        lay.setSpacing(14)
+
+        lbl_title = QLabel(T("stats_title"))
+        lbl_title.setStyleSheet(f"font-size:18px;font-weight:800;color:{C['purple_lt']};")
+        lay.addWidget(lbl_title)
+
+        lay.addWidget(QLabel(f"{T('stats_downloads')}:  {total}"))
+        lay.addWidget(QLabel(f"{T('stats_mb')}:  {mb} MB"))
+        lay.addWidget(QLabel(f"MP3:  {mp3_n}  |  FLAC:  {flac_n}  |  WAV:  {wav_n}"))
+
+        lay.addStretch()
+
+        btn_ok = QPushButton(T("btn_close"))
+        btn_ok.setObjectName("btnLog")
+        btn_ok.clicked.connect(self.accept)
+        lay.addWidget(btn_ok, alignment=Qt.AlignmentFlag.AlignRight)
+
+
+# ──────────────────────────────────────────────────────────────────
+#  BATCH SEARCH DIALOG
+# ──────────────────────────────────────────────────────────────────
+
+class BatchDialog(QDialog):
+    batch_ready = pyqtSignal(list)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(T("batch_title"))
+        self.resize(520, 380)
+        self.setStyleSheet(STYLE)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(18, 18, 18, 18)
+        lay.setSpacing(12)
+
+        lbl_hdr = QLabel(T("batch_header"))
+        lbl_hdr.setStyleSheet(f"font-size:15px;font-weight:700;color:{C['purple_lt']};")
+        lay.addWidget(lbl_hdr)
+
+        lbl_desc = QLabel(T("batch_desc"))
+        lbl_desc.setStyleSheet(f"color:{C['text2']};font-size:12px;")
+        lbl_desc.setWordWrap(True)
+        lay.addWidget(lbl_desc)
+
+        self.text_edit = QTextEdit()
+        self.text_edit.setStyleSheet(
+            f"background:{C['bg2']};color:{C['text']};border:1px solid {C['border']};"
+            f"border-radius:8px;padding:8px;font-size:13px;"
+        )
+        self.text_edit.setPlaceholderText(T("batch_placeholder"))
+        lay.addWidget(self.text_edit, stretch=1)
+
+        row = QHBoxLayout()
+        self.btn_resolve = QPushButton(T("batch_resolve"))
+        self.btn_resolve.setObjectName("btnDownload")
+        self.btn_resolve.clicked.connect(self._resolve)
+        row.addWidget(self.btn_resolve)
+
+        self.btn_cancel = QPushButton(T("btn_cancel"))
+        self.btn_cancel.setObjectName("btnClear")
+        self.btn_cancel.clicked.connect(self.reject)
+        row.addWidget(self.btn_cancel)
+        lay.addLayout(row)
+
+        self.status_lbl = QLabel("")
+        self.status_lbl.setStyleSheet(f"color:{C['text3']};font-size:11px;")
+        lay.addWidget(self.status_lbl)
+
+    def _resolve(self):
+        text = self.text_edit.toPlainText().strip()
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        if not lines:
+            return
+
+        self.btn_resolve.setEnabled(False)
+        self.status_lbl.setText(T("batch_resolving"))
+        QApplication.processEvents()
+
+        all_tracks = {}
+        cover_quality = _CONFIG.get("cover_quality", "medium")
+
+        def resolve_one(line):
+            detected = _detect_link(line)
+            if detected[0] == "spotify":
+                t = spotifytrack.handle_spotify(detected[1], detected[2], cover_quality=cover_quality)
+                return t or []
+            elif detected[0] == "deezer":
+                if detected[1] == "track":
+                    t = deezertrack.get_track_detail(detected[2], cover_quality)
+                    return [t] if t else []
+                elif detected[1] == "album":
+                    return deezertrack.get_deezer_album(detected[2], cover_quality=cover_quality) or []
+                elif detected[1] == "playlist":
+                    return deezertrack.get_deezer_playlist(detected[2], cover_quality=cover_quality) or []
+            else:
+                t = deezertrack.search_deezer_by_name(line, line, cover_quality)
+                return [t] if t else []
+            return []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            futures = {pool.submit(resolve_one, l): l for l in lines}
+            for f in concurrent.futures.as_completed(futures):
+                results = f.result()
+                for r in results:
+                    if r and r.get("deezer_id") not in all_tracks:
+                        all_tracks[r["deezer_id"]] = r
+
+        tracks = list(all_tracks.values())
+        if tracks:
+            self.batch_ready.emit(tracks)
+            self.status_lbl.setText(T("batch_done", n=len(tracks)))
+            QTimer.singleShot(600, self.accept)
+        else:
+            self.status_lbl.setText(T("batch_no_results"))
+            self.btn_resolve.setEnabled(True)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -1507,24 +1929,31 @@ class MusicWavver(QMainWindow):
         row.addLayout(col)
         row.addStretch()
 
-        btn_playlist = QPushButton(T("btn_playlist"))
-        btn_playlist.setObjectName("btnPlay")
-        btn_playlist.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        btn_playlist.clicked.connect(self._open_playlist)
+        btn_batch = QPushButton(T("btn_batch"))
+        btn_batch.setObjectName("btnPlay")
+        btn_batch.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        btn_batch.clicked.connect(self._open_batch)
 
         btn_settings = QPushButton(T("btn_settings"))
         btn_settings.setObjectName("btnSettings")
         btn_settings.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         btn_settings.clicked.connect(self._open_settings)
 
+        btn_stats = QPushButton(T("btn_stats"))
+        btn_stats.setObjectName("btnSettings")
+        btn_stats.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        btn_stats.clicked.connect(self._open_stats)
+
         btn_log = QPushButton(T("btn_log"))
         btn_log.setObjectName("btnLog")
         btn_log.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         btn_log.clicked.connect(self._log_dlg.show)
 
-        row.addWidget(btn_playlist)
+        row.addWidget(btn_batch)
         row.addSpacing(8)
         row.addWidget(btn_settings)
+        row.addSpacing(8)
+        row.addWidget(btn_stats)
         row.addSpacing(8)
         row.addWidget(btn_log)
         return w
@@ -1623,6 +2052,7 @@ class MusicWavver(QMainWindow):
         self.fmt_combo = QComboBox()
         self.fmt_combo.setObjectName("fmtCombo")
         self.fmt_combo.addItems(["mp3", "flac", "wav"])
+        self.fmt_combo.setCurrentText(_CONFIG.get("default_fmt", "mp3"))
         row.addWidget(self.fmt_combo)
 
         row.addStretch()
@@ -1761,15 +2191,22 @@ class MusicWavver(QMainWindow):
         self._set_status(T("status_preparing", title=t["title"]), 5)
  
         custom_dir = _CONFIG.get("download_dir")
+        self._dl_row = row
         self._dl_wk = DownloadWorker(
             t.get("deezer_id"), t["title"], t["artist"], t["album"], fmt,
-            isrc=t.get("isrc"), custom_dir=custom_dir
+            isrc=t.get("isrc"), custom_dir=custom_dir,
+            filename_template=_CONFIG.get("filename_template", "{artist} - {title}"),
+            overwrite_existing=_CONFIG.get("overwrite_existing", True),
+            audio_source=_CONFIG.get("audio_source", "all"),
         )
         self._dl_wk.progress.connect(self.prog.setValue)
         self._dl_wk.status.connect(lambda s: self._set_status(s))
         self._dl_wk.finished.connect(self._on_dl_done)
         self._dl_wk.error.connect(self._on_dl_err)
+        self._dl_wk.qobuz_failed.connect(self._on_qobuz_failed)
         self._dl_wk.log.connect(self._log)
+        if _CONFIG.get("notify_done", True):
+            self._dl_wk.notify.connect(self._show_notification)
         self._dl_wk.start()
 
     def _on_dl_done(self, path: str):
@@ -1781,12 +2218,71 @@ class MusicWavver(QMainWindow):
         )
         QTimer.singleShot(4000, lambda: self.prog.setValue(0))
         self._log(T("dl_log_ready", path=path))
+        self._update_stats(path)
+
+    def _update_stats(self, path: str):
+        ext = os.path.splitext(path)[1].lstrip(".").lower()
+        size_mb = round(os.path.getsize(path) / (1024 * 1024), 1) if os.path.exists(path) else 0
+        s = _CONFIG.setdefault("stats", {})
+        s["total_downloads"] = s.get("total_downloads", 0) + 1
+        s["total_mb"] = round(s.get("total_mb", 0) + size_mb, 1)
+        s[f"fmt_{ext}"] = s.get(f"fmt_{ext}", 0) + 1
+        _save_config()
 
     def _on_dl_err(self, msg: str):
         self.btn_dl.setEnabled(True)
         self._set_status(f"❌  {msg.splitlines()[0]}", 0)
         self.prog.setValue(0)
         QMessageBox.critical(self, T("err_download_title"), msg)
+
+    def _on_qobuz_failed(self, artist: str, title: str, isrc: str):
+        if not isrc:
+            self.btn_dl.setEnabled(True)
+            self._set_status(T("err_stream_url"), 0)
+            return
+        reply = QMessageBox.question(
+            self, T("dl_ask_yt_title"),
+            T("dl_ask_yt_msg", artist=artist, title=title),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            t = self._tracks[self._dl_row]
+            fmt = self.fmt_combo.currentText()
+            custom_dir = _CONFIG.get("download_dir")
+            dw = DownloadWorker(
+                t.get("deezer_id"), t["title"], t["artist"], t["album"], fmt,
+                isrc=isrc, custom_dir=custom_dir,
+                filename_template=_CONFIG.get("filename_template", "{artist} - {title}"),
+                overwrite_existing=_CONFIG.get("overwrite_existing", True),
+                audio_source=_CONFIG.get("audio_source", "all"),
+                yt_mode=True,
+            )
+            dw.progress.connect(self.prog.setValue)
+            dw.status.connect(lambda s: self._set_status(s))
+            dw.finished.connect(self._on_dl_done)
+            dw.error.connect(self._on_dl_err)
+            dw.log.connect(self._log)
+            if _CONFIG.get("notify_done", True):
+                dw.notify.connect(self._show_notification)
+            dw.start()
+        else:
+            self.btn_dl.setEnabled(True)
+            self._set_status("", 0)
+            self.prog.setValue(0)
+
+    def _show_notification(self, title: str, artist: str):
+        try:
+            from plyer import notification
+            notification.notify(
+                title="Music Wavver",
+                message=f"✅ {artist} — {title}",
+                timeout=5,
+            )
+        except ImportError:
+            pass
+        except Exception:
+            pass
 
     def _do_play(self):
         if not self._last_file or not os.path.exists(self._last_file):
@@ -1816,17 +2312,46 @@ class MusicWavver(QMainWindow):
 
     def _open_settings(self):
         current_dir = _CONFIG.get("download_dir", DownloadWorker._music_dir())
-        dlg = SettingsDialog(self, music_dir=current_dir, current_theme=_theme_name)
+        saved_primary = _primary
+        dlg = SettingsDialog(
+            self, music_dir=current_dir, current_color=_primary,
+            default_fmt=_CONFIG.get("default_fmt", "mp3"),
+            cover_quality=_CONFIG.get("cover_quality", "medium"),
+            language=_CONFIG.get("language", "auto"),
+            filename_template=_CONFIG.get("filename_template", "{artist} - {title}"),
+            notify_done=_CONFIG.get("notify_done", True),
+            overwrite_existing=_CONFIG.get("overwrite_existing", True),
+            audio_source=_CONFIG.get("audio_source", "all"),
+        )
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            new_dir = dlg.get_dir()
-            new_theme = dlg.get_theme()
-            _CONFIG["download_dir"] = new_dir
-            if new_theme != _theme_name:
-                _apply_theme(new_theme)
+            _CONFIG["download_dir"] = dlg.get_dir()
+            _CONFIG["default_fmt"] = dlg.get_fmt()
+            _CONFIG["cover_quality"] = dlg.get_cover_quality()
+            _CONFIG["language"] = dlg.get_language()
+            _CONFIG["filename_template"] = dlg.get_filename_template()
+            _CONFIG["notify_done"] = dlg.get_notify_done()
+            _CONFIG["overwrite_existing"] = dlg.get_overwrite_existing()
+            _CONFIG["audio_source"] = dlg.get_audio_source()
+            new_color = dlg.get_color()
+            if new_color != saved_primary:
+                _apply_color(new_color)
+                self._refresh_styles()
             _save_config()
 
     def _open_playlist(self, initial_url: str = ""):
         dlg = PlaylistDialog(self, initial_url=initial_url)
+        dlg.exec()
+
+    def _open_batch(self):
+        dlg = BatchDialog(self)
+        dlg.batch_ready.connect(self._on_batch_results)
+        dlg.exec()
+
+    def _on_batch_results(self, tracks: list):
+        self._on_results(tracks)
+
+    def _open_stats(self):
+        dlg = StatsDialog(self)
         dlg.exec()
 
     def _on_cover_loaded(self, row: int, pix: QPixmap):
@@ -1844,6 +2369,13 @@ class MusicWavver(QMainWindow):
         """Invia il messaggio alla finestra di log (che lo scrive anche su file)."""
         self._log_dlg.append(msg)
 
+    def _refresh_styles(self):
+        self.setStyleSheet(STYLE)
+        for w in self.findChildren(QWidget):
+            w.setStyleSheet("")
+        self.fmt_combo.setStyleSheet("")
+        self.search_edit.setStyleSheet("")
+
 
 # ──────────────────────────────────────────────────────────────────
 #  ENTRY POINT
@@ -1857,8 +2389,12 @@ def main():
         pass
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Music Wavver 6.5.1")
-    app.setApplicationVersion("6.5.1")
+    icon_path = os.path.join(_base_dir(), "Logo.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+    app.setApplicationName("Music Wavver 6.6")
+    app.setApplicationVersion("6.6.0")
+    log_path = os.path.join(os.path.expanduser("~"), "music_wavver.log")
 
     # ── Carica le traduzioni — se manca il file, esci ──
     if not _load_languages():
@@ -1898,4 +2434,5 @@ def main():
 
 
 if __name__ == "__main__":
+    print("You Found Me!") if datetime.now().month == 4 and datetime.now().day == 1 else ""
     main()
